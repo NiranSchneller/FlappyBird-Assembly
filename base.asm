@@ -72,6 +72,8 @@ proc MainScreen
 		loop @@Wait
 	WaitTillPressOnPoint:
 
+	mov dx, offset MainName
+	call OpenShowBmp
 	
 	mov ax,5h
 	mov bx,0 
@@ -125,6 +127,8 @@ proc HelpScreen
 		loop @@@Wait
 	@@@WaitTillPressOnPoint:
 
+	mov dx, offset HelpName
+	call OpenShowBmp
 	
 	mov ax,5h
 	mov bx,0 
@@ -138,9 +142,28 @@ proc HelpScreen
 	
 	jmp MouseHasBeenClicked
 	
+	@@GoToStart:	
+		jmp StartScreen
+	@@GoToMain: 
+		jmp MainScreen
+	
 	
 	MouseHasBeenClicked: 
+		push 248
+		push 292
+		push 140
+		push 147
+		call isInBoundary
+		jc @@GoToStart
 		
+		push 250
+		push 290
+		push 155
+		push 166
+		call isInBoundary
+		jc @@GoToMain
+		
+	jmp @@@ClickWaitWithDelay
 	
 
 	
