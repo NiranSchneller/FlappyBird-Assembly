@@ -2,17 +2,24 @@ IDEAL
 MODEL small
 
 
+
 STACK 100h
 
-MAIN equ 'Main.bmp'
-HELP equ 'Help.bmp'
+START_SCREEN equ 'Start.bmp'
+MAIN_SCREEN equ 'Main.bmp'
+HELP_SCREEN equ 'Help.bmp'
+
 BMP_WIDTH = 320
+
+; true if carry flag is one
+
 
 
 DATASEG
 	
-	MainName  db MAIN , 0
-	HelpName db HELP, 0
+	MainName  db MAIN_SCREEN , 0
+	HelpName db HELP_SCREEN , 0
+	StartName db START_SCREEN , 0
 	FileHandle	dw ?
 	Header 	    db 54 dup(0)
 	Palette 	db 400h dup (0)
@@ -24,7 +31,7 @@ DATASEG
 	
 	ErrorFile db 0
 
-	BmpFileErrorMsg    	db 'Error At Opening Bmp File ',MAIN, 0dh, 0ah,'$'
+	BmpFileErrorMsg    	db 'Error At Opening Bmp File ',MAIN_SCREEN, 0dh, 0ah,'$'
 
 	
 	ScrLine db BMP_WIDTH dup (0)  ; One Color line read buffer
@@ -45,8 +52,8 @@ start:
 	mov [BmpRowSize] ,200
 	
 	ShowMain: 
-		mov dx, offset MainName
-		call OpenShowBmp
+		mov ax, 1
+		int 33h
 		call MainScreen
 	
 exit:	
@@ -56,6 +63,8 @@ exit:
 	
 proc MainScreen
 	
+	mov dx, offset MainName
+	call OpenShowBmp
 		
 	ClickWaitWithDelay:
 		mov cx,1000
@@ -68,41 +77,123 @@ proc MainScreen
 	mov bx,0 
 	int 33h
 	
+	
 	cmp bx,00h
-	jna ClickWaitWithDelay  ; mouse wasn't pressed
+	jne ClickWaitWithDelay  ; mouse wasn't pressed
 	
 	shr cx, 1 ; 640 / 2 = 320
-	
 	jmp Clicked
 	GoToHelp: 
-		mov dx, offset HelpName
-		call OpenShowBmp
 		jmp HelpScreen
-	
+	GoToStart:
+		jmp StartScreen
 	; if (horizontal position > 135 && < 184 && vertical position > 162 && < 177) -> go to help
 	Clicked: 
-		cmp cx, 135 
-		jb WaitTillPressOnPoint ; if horizontal position is bigger than 135 -> check other horizontal position
+		push 135
+		push 184
+		push 162
+		push 177
+		call isInBoundary
+		;IS_IN_BOUNDARY 135, 184, 162, 177
+		jc GoToHelp
 		
-		CheckHelpX: 
-			cmp cx, 184
-			ja WaitTillPressOnPoint ; if horizontal position is smaller than 184 -> check vertical position
-		CheckUpperHelpY: 
-			cmp dx, 162
-			jb WaitTillPressOnPoint ; if vertical position is bigger than 162 -> check other vertical position
-		CheckLowerHelpY: 
-			cmp dx, 177
-			ja WaitTillPressOnPoint ; if vertical position is smaller than 177 -> go to help
+		push 135
+		push 184
+		push 129
+		push 142
+		call isInBoundary
+		;IS_IN_BOUNDARY 135, 184, 129, 142
+		jc GoToStart
 		
-		jmp Clicked
+	jmp ClickWaitWithDelay
+		
+		
 	ret
 endp MainScreen
 
+
+
+
 proc HelpScreen
 
+	mov dx, offset HelpName
+	call OpenShowBmp
+		
+	@@@ClickWaitWithDelay:
+		mov cx,1000
+	@@@Wait:	
+		loop @@@Wait
+	@@@WaitTillPressOnPoint:
+
+	
+	mov ax,5h
+	mov bx,0 
+	int 33h
+	
+	
+	cmp bx,00h
+	jne @@@ClickWaitWithDelay  ; mouse wasn't pressed
+
+	shr cx, 1
+	
+	jmp MouseHasBeenClicked
+	
+	
+	MouseHasBeenClicked: 
+		
+	
+
+	
 
 	ret
 endp HelpScreen
+
+proc StartScreen
+	mov dx, offset StartName
+	call OpenShowBmp
+	
+	
+	ret
+endp StartScreen
+
+proc Game
+	
+	ret
+endp Game
+
+; true if carry flag
+proc isInBoundary
+	push bp
+	mov bp, sp
+	
+	lower_x equ [bp+10] 
+	higher_x equ [bp+8] 
+	lower_y equ [bp+6] 
+	higher_y equ [bp+4]
+	
+	jmp Check
+	CarryTrue: 
+		pop bp
+		jmp exitProc
+	
+	Check: 
+	cmp cx, lower_x
+	jb endBoundaryCheck
+	cmp cx, higher_x 
+	ja endBoundaryCheck
+	cmp dx, lower_y
+	jb endBoundaryCheck
+	cmp dx, higher_y
+	ja endBoundaryCheck
+	stc
+	jmp CarryTrue
+	
+	endBoundaryCheck: 
+		pop bp
+		clc
+	exitProc: 
+	ret 8
+endp isInBoundary
 
 
 proc ClearScreen
