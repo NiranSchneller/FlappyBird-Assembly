@@ -405,8 +405,9 @@ proc OpenBmpFile	near
 	ret
 endp OpenBmpFile
 
+
 proc ShowBMP 
-; BMP graphics are saved upside-down.
+; BMP graphics are saved upside-down.dsds
 ; Read the graphic line by line (BmpRowSize lines in VGA format),
 ; displaying the lines from bottom to top.
 	push cx
