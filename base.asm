@@ -9,15 +9,14 @@ START_SCREEN equ 'Start.bmp'
 MAIN_SCREEN equ 'Main.bmp'
 HELP_SCREEN equ 'Help.bmp'
 BIRD equ 'Bird.bmp'
-
+ERASE_SCREEN equ 'Erase.bmp'
 BMP_WIDTH = 320
 
 PLAYER_SIZE = 20
+PLAYER_PIXEL_MOVEMENT = 5
 
-
-; true if carry flag is one
-
-
+TRUE = 1
+FALSE = 0
 
 DATASEG
 	
@@ -25,6 +24,7 @@ DATASEG
 	HelpName db HELP_SCREEN , 0
 	StartName db START_SCREEN , 0
 	BirdName db BIRD, 0
+	EraseScreenName db ERASE_SCREEN, 0
 	FileHandle	dw ?
 	Header 	    db 54 dup(0)
 	Palette 	db 400h dup (0)
@@ -42,8 +42,11 @@ DATASEG
 	ScrLine db BMP_WIDTH dup (0)  ; One Color line read buffer
 	
 	PlayerYPosition db 100 ; Starting player position (half of screen )
-
 	
+	FirstPoleXPosition dw 100 
+	SecondPoleXPostion dw 200
+	ThirdPoleXPosition dw 300
+	; first second and third just mean starting on the X axis when game Initializes
 CODESEG
  
 start:                          
@@ -67,7 +70,7 @@ exit:
 	mov ax,4C00h
     int 21h
 	
-	
+;==============================
 proc MainScreen
 	
 	mov dx, offset MainName
@@ -182,52 +185,131 @@ endp HelpScreen
 proc Game
 	; initialize: 
 	
-	mov cx, 0
-	mov dx, 0
-	mov al, 0
-	mov si, 200
-	mov di, 400
-	call Rect ; erase screen
+	mov ax, 2h ; hide cursor
+	int 33h
+	
+	mov dx, offset EraseScreenName
+	call OpenShowBmp
 	
 	call InitializePlayer
-	
-	
+
 	MainLoop: 
+		
 		call HandlePlayer ; handles player movement
 		
+		xor dx,dx
+		
+		call HandleIllegalPosition ; position > 200 or position < 0
+		
+		cmp dx, TRUE
+		je EndGame
+		
+		;call HandlePoles
+		
+		
+		
 	jmp MainLoop
+	
+	EndGame: 
+		jmp exit
 	ret
 endp Game
 
+proc HandlePoles
+	xor cx,cx
+	
+	
+	
+	dec [FirstPoleXPosition]
+	dec [SecondPoleXPostion]
+	dec [ThirdPoleXPosition]
+	
+	mov cx, [FirstPoleXPosition]
+	call DrawLowPole
+	
+	mov cx, [SecondPoleXPostion]
+	call DrawLowPole
+	
+	mov cx, [ThirdPoleXPosition]
+	call DrawHighPole
+	
+	
+
+	ret
+endp HandlePoles
+
+proc HandleIllegalPosition
+	xor ax,ax
+	jmp CheckForForbiddenPositon
+	
+	SetDX: 
+		mov dx, TRUE
+		jmp EndHandleIllegalPosition
+		
+	
+	CheckForForbiddenPositon:
+		mov al, [PlayerYPosition]
+		
+		mov dl, 200
+		sub dl, PLAYER_SIZE
+		
+		cmp al, dl
+		ja SetDX
+		
+		cmp al, 1
+		jb SetDX
+	
+	EndHandleIllegalPosition: 
+	ret
+endp HandleIllegalPosition
+
 proc HandlePlayer
+
 	mov ah, 1h
-	int 16h 
-	jz KeyPressed ; if a key was pressed 
+	int 16h
+	jnz KeyPressed ; if a key was pressed (ZF = 0) 
 	jmp KeyNotPressed
 	
 	KeyPressed: 
-		mov ah, 0h ; clear buffer
+		mov ah, 00h ; clear buffer
 		int 16h
-		cmp ah, 84
-		jne DownKeyNotPressed
+		cmp al, 's' 
+		je DownKeyPressed
+		
+		cmp al, 'w'
+		je UpKeyPressed
+		
+		jmp KeyNotPressed
+	
+	DownKeyPressed: 
 		call MovePlayerDown
-	
-	DownKeyNotPressed: 
-	
-	
-	
+		jmp KeyNotPressed
+	UpKeyPressed: 
+		call MovePlayerUp
+		jmp KeyNotPressed
 	KeyNotPressed: 
+		
 	ret
 endp HandlePlayer
 
 proc MovePlayerDown
 	
 	call ErasePlayer
-	add [PlayerYPosition], 4
+	add [PlayerYPosition], PLAYER_PIXEL_MOVEMENT
+	
 	call DrawPlayer
 	
 	ret
 endp MovePlayerDown
+
+proc MovePlayerUp
+	
+	call ErasePlayer
+	sub [PlayerYPosition], PLAYER_PIXEL_MOVEMENT
+	call DrawPlayer
+	
+	ret
+endp MovePlayerUp
 
 proc DrawPlayer
 	mov [BmpLeft],20
@@ -250,11 +332,11 @@ endp DrawPlayer
 
 proc ErasePlayer
 	
-	mov cx, 10
+	mov cx, 5
 	mov dl, [PlayerYPosition]
-	sub dl, 20
-	mov si, 30
-	mov di, 20
+	mov al, 0
+	mov si, 50
+	mov di, 50
 	call Rect
 	
 	ret	
@@ -306,7 +388,98 @@ proc isInBoundary
 	exitProc: 
 	ret 8
 endp isInBoundary
- 
+
+proc DrawLowPole 
+	push ax
+	push dx
+	push si
+	push di
+	
+	mov al, 2
+	mov dx, 0 ; row
+	mov si, 130 ; height
+	mov di, 20 ; width
+	call Rect
+	
+	mov al, 2
+	mov dx, 170 ; row
+	mov si, 30 ; height
+	mov di, 20 ; width
+	call Rect
+	
+	pop di
+	pop si
+	pop dx
+	pop ax
+	
+	ret
+endp DrawLowPole 
+
+proc DrawMidPole 
+	
+	push ax
+	push dx
+	push si
+	push di
+	
+	mov al, 2
+	mov dx, 0 ; row
+	mov si, 75 ; height
+	mov di, 20 ; width
+	call Rect
+	
+	mov al, 2
+	mov dx, 115 ; row
+	mov si, 85 ; height
+	mov di, 20 ; width
+	call Rect
+
+	pop di
+	pop si
+	pop dx
+	pop ax
+
+	ret
+endp DrawMidPole 
+
+proc DrawHighPole
+	
+	push ax
+	push dx
+	push si
+	push di
+	
+	mov dx, 0
+	mov al, 2
+	mov si, 10
+	mov di, 20
+	call Rect
+
+	mov dx, 50
+	mov al, 2
+	mov si, 150
+	mov di, 20
+	call Rect
+	
+	pop di
+	pop si
+	pop dx
+	pop ax
+
+	ret
+endp DrawHighPole 
+
+proc ErasePole 
+	
+	mov al, 0
+	mov dx, 0 ; row
+	mov si, 200 ; height
+	call Rect
+
+	ret
+endp ErasePole 
+
+
 proc DrawVerticalLine
 	push si
 	push dx
