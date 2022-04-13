@@ -9,14 +9,19 @@ START_SCREEN equ 'Start.bmp'
 MAIN_SCREEN equ 'Main.bmp'
 HELP_SCREEN equ 'Help.bmp'
 BIRD equ 'Bird.bmp'
+BIRD_UP equ 'BirdUp.bmp'
 ERASE_SCREEN equ 'Erase.bmp'
+
 BMP_WIDTH = 320
 
-PLAYER_SIZE = 20
+PLAYER_SIZE = 15
 PLAYER_PIXEL_MOVEMENT = 5
 
 TRUE = 1
 FALSE = 0
+
+WAIT_FOR_POLES = 100
+
 
 DATASEG
 	
@@ -24,6 +29,7 @@ DATASEG
 	HelpName db HELP_SCREEN , 0
 	StartName db START_SCREEN , 0
 	BirdName db BIRD, 0
+	BirdUpName db BIRD_UP, 0
 	EraseScreenName db ERASE_SCREEN, 0
 	FileHandle	dw ?
 	Header 	    db 54 dup(0)
@@ -44,7 +50,7 @@ DATASEG
 	PlayerYPosition db 100 ; Starting player position (half of screen )
 	
 	FirstPoleXPosition dw 100 
-	SecondPoleXPostion dw 200
+	SecondPoleXPosition dw 200
 	ThirdPoleXPosition dw 300
 	; first second and third just mean starting on the X axis when game Initializes
 CODESEG
@@ -192,18 +198,35 @@ proc Game
 	call OpenShowBmp
 	
 	call InitializePlayer
+	
+	call InitializePoles
+	mov cx, 300
+	call ErasePoles
+	
+	mov cx, WAIT_FOR_POLES ; this will be wait untill poles are erased and put on screen
+	
 	MainLoop: 
+		push cx
 		
-		call HandlePlayer ; handles player movement
+		call HandlePlayerMovement ; handles player movement
 		
-		xor dx,dx
+		xor dx,dx ; RESET DX
 		
-		call HandleIllegalPosition ; position > 200 or position < 0
+		call HandleIllegalPlayerPosition ; position > 200 or position < 0
 		
 		cmp dx, TRUE
 		je EndGame
 		
-		call HandlePoles
+		cmp cx, 0
+		je HandlePolesAllowed
+		jmp HandlePolesForbidden
+		HandlePolesAllowed: 
+			call HandlePoles
+			jmp AfterHandlePolesAllowed
+			mov cx, WAIT_FOR_POLES
+		HandlePolesForbidden: 	
+			pop cx
+		AfterHandlePolesAllowed: 
 	jmp MainLoop
 	
 	EndGame: 
@@ -211,23 +234,38 @@ proc Game
 	ret
 endp Game
 
+
+proc InitializePoles
+	
+	mov cx, [FirstPoleXPosition]
+	call DrawLowPole
+	
+	mov cx, [SecondPoleXPosition]
+	call DrawHighPole
+	
+	mov cx, [ThirdPoleXPosition]
+	call DrawMidPole
+	
+	
+	ret
+endp InitializePoles
+
 proc HandlePoles
 	xor cx,cx
 	
+	call ErasePoles
 
 	dec [FirstPoleXPosition]
-	dec [SecondPoleXPostion]
+	dec [SecondPoleXPosition]
 	dec [ThirdPoleXPosition]
 	
 	mov cx, [FirstPoleXPosition]
 	call DrawLowPole
 	
-	call ErasePole
 	
-	mov cx, [SecondPoleXPostion]
+	mov cx, [SecondPoleXPosition]
 	call DrawLowPole
 	
-	call ErasePole
 	
 	mov cx, [ThirdPoleXPosition]
 	call DrawHighPole
@@ -240,7 +278,7 @@ proc ErasePoles
 	mov cx, [FirstPoleXPosition]
 	call ErasePole
 	
-	mov cx, [SecondPoleXPostion]
+	mov cx, [SecondPoleXPosition]
 	call ErasePole
 	
 	mov cx, [ThirdPoleXPosition]
@@ -249,13 +287,13 @@ proc ErasePoles
 	ret
 endp ErasePoles
 
-proc HandleIllegalPosition
+proc HandleIllegalPlayerPosition
 	xor ax,ax
 	jmp CheckForForbiddenPositon
 	
 	SetDX: 
 		mov dx, TRUE
-		jmp EndHandleIllegalPosition
+		jmp EndHandleIllegalPlayerPosition
 		
 	
 	CheckForForbiddenPositon:
@@ -270,11 +308,11 @@ proc HandleIllegalPosition
 		cmp al, 1
 		jb SetDX
 	
-	EndHandleIllegalPosition: 
+	EndHandleIllegalPlayerPosition: 
 	ret
-endp HandleIllegalPosition
+endp HandleIllegalPlayerPosition
 
-proc HandlePlayer
+proc HandlePlayerMovement
 
 	mov ah, 1h
 	int 16h
@@ -286,8 +324,13 @@ proc HandlePlayer
 		int 16h
 		cmp al, 's' 
 		je DownKeyPressed
+		cmp al, 'S'
+		je DownKeyPressed
+		
 		
 		cmp al, 'w'
+		je UpKeyPressed
+		cmp al, 'W'
 		je UpKeyPressed
 		
 		jmp KeyNotPressed
@@ -300,7 +343,7 @@ proc HandlePlayer
 	KeyNotPressed: 
 		
 	ret
-endp HandlePlayer
+endp HandlePlayerMovement
 
 proc MovePlayerDown
 	
@@ -481,9 +524,12 @@ endp DrawHighPole
 
 proc ErasePole 
 	
+	
+	
 	mov al, 0
 	mov dx, 0 ; row
 	mov si, 200 ; height
+	mov di, 20
 	call Rect
 
 	ret
