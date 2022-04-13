@@ -192,7 +192,6 @@ proc Game
 	call OpenShowBmp
 	
 	call InitializePlayer
-
 	MainLoop: 
 		
 		call HandlePlayer ; handles player movement
@@ -204,10 +203,7 @@ proc Game
 		cmp dx, TRUE
 		je EndGame
 		
-		;call HandlePoles
-		
-		
-		
+		call HandlePoles
 	jmp MainLoop
 	
 	EndGame: 
@@ -218,8 +214,7 @@ endp Game
 proc HandlePoles
 	xor cx,cx
 	
-	
-	
+
 	dec [FirstPoleXPosition]
 	dec [SecondPoleXPostion]
 	dec [ThirdPoleXPosition]
@@ -227,16 +222,32 @@ proc HandlePoles
 	mov cx, [FirstPoleXPosition]
 	call DrawLowPole
 	
+	call ErasePole
+	
 	mov cx, [SecondPoleXPostion]
 	call DrawLowPole
+	
+	call ErasePole
 	
 	mov cx, [ThirdPoleXPosition]
 	call DrawHighPole
 	
-	
 
 	ret
 endp HandlePoles
+
+proc ErasePoles
+	mov cx, [FirstPoleXPosition]
+	call ErasePole
+	
+	mov cx, [SecondPoleXPostion]
+	call ErasePole
+	
+	mov cx, [ThirdPoleXPosition]
+	call ErasePole
+	
+	ret
+endp ErasePoles
 
 proc HandleIllegalPosition
 	xor ax,ax
@@ -286,7 +297,6 @@ proc HandlePlayer
 		jmp KeyNotPressed
 	UpKeyPressed: 
 		call MovePlayerUp
-		jmp KeyNotPressed
 	KeyNotPressed: 
 		
 	ret
