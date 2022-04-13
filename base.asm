@@ -8,8 +8,12 @@ STACK 100h
 START_SCREEN equ 'Start.bmp'
 MAIN_SCREEN equ 'Main.bmp'
 HELP_SCREEN equ 'Help.bmp'
+BIRD equ 'Bird.bmp'
 
 BMP_WIDTH = 320
+
+PLAYER_SIZE = 20
+
 
 ; true if carry flag is one
 
@@ -20,6 +24,7 @@ DATASEG
 	MainName  db MAIN_SCREEN , 0
 	HelpName db HELP_SCREEN , 0
 	StartName db START_SCREEN , 0
+	BirdName db BIRD, 0
 	FileHandle	dw ?
 	Header 	    db 54 dup(0)
 	Palette 	db 400h dup (0)
@@ -32,9 +37,11 @@ DATASEG
 	ErrorFile db 0
 
 	BmpFileErrorMsg    	db 'Error At Opening Bmp File ',MAIN_SCREEN, 0dh, 0ah,'$'
-
+	
 	
 	ScrLine db BMP_WIDTH dup (0)  ; One Color line read buffer
+	
+	PlayerYPosition db 100 ; Starting player position (half of screen )
 
 	
 CODESEG
@@ -87,8 +94,8 @@ proc MainScreen
 	jmp Clicked
 	GoToHelp: 
 		jmp HelpScreen
-	GoToStart:
-		jmp StartScreen
+	GoToGame:
+		jmp Game
 	; if (horizontal position > 135 && < 184 && vertical position > 162 && < 177) -> go to help
 	Clicked: 
 		push 135
@@ -105,11 +112,12 @@ proc MainScreen
 		push 142
 		call isInBoundary
 		;IS_IN_BOUNDARY 135, 184, 129, 142
-		jc GoToStart
+		jc GoToGame
 		
 	jmp ClickWaitWithDelay
 		
-		
+	
+	
 	ret
 endp MainScreen
 
@@ -142,8 +150,8 @@ proc HelpScreen
 	
 	jmp MouseHasBeenClicked
 	
-	@@GoToStart:	
-		jmp StartScreen
+	@@GoToGame:	
+		jmp Game
 	@@GoToMain: 
 		jmp MainScreen
 	
@@ -154,7 +162,7 @@ proc HelpScreen
 		push 140
 		push 147
 		call isInBoundary
-		jc @@GoToStart
+		jc @@GoToGame
 		
 		push 250
 		push 290
@@ -171,18 +179,99 @@ proc HelpScreen
 	ret
 endp HelpScreen
 
-proc StartScreen
-	mov dx, offset StartName
-	call OpenShowBmp
-	
-	
-	ret
-endp StartScreen
-
 proc Game
+	; initialize: 
 	
+	mov cx, 0
+	mov dx, 0
+	mov al, 0
+	mov si, 200
+	mov di, 400
+	call Rect ; erase screen
+	
+	call InitializePlayer
+	
+	
+	MainLoop: 
+		call HandlePlayer ; handles player movement
+		
+	jmp MainLoop
 	ret
 endp Game
+
+proc HandlePlayer
+	mov ah, 1h
+	int 16h 
+	jz KeyPressed ; if a key was pressed 
+	jmp KeyNotPressed
+	
+	KeyPressed: 
+		mov ah, 0h ; clear buffer
+		int 16h
+		cmp ah, 84
+		jne DownKeyNotPressed
+		call MovePlayerDown
+	
+	DownKeyNotPressed: 
+	
+	
+	
+	KeyNotPressed: 
+	ret
+endp HandlePlayer
+
+proc MovePlayerDown
+	
+	call ErasePlayer
+	add [PlayerYPosition], 4
+	call DrawPlayer
+	
+	ret
+endp MovePlayerDown
+
+proc DrawPlayer
+	mov [BmpLeft],20
+	
+	push ax
+	
+	mov al, [PlayerYPosition]
+	mov [BmpTop], ax
+	
+	pop ax
+	
+	mov [BmpColSize],PLAYER_SIZE
+	mov [BmpRowSize],PLAYER_SIZE
+	
+	mov dx, offset BirdName
+	call OpenShowBmp
+	
+	ret
+endp DrawPlayer
+
+proc ErasePlayer
+	
+	mov cx, 10
+	mov dl, [PlayerYPosition]
+	sub dl, 20
+	mov si, 30
+	mov di, 20
+	call Rect
+	
+	ret	
+endp ErasePlayer
+
+
+proc InitializePlayer
+	mov [BmpLeft],20
+	mov [BmpTop],100
+	mov [BmpColSize],PLAYER_SIZE
+	mov [BmpRowSize],PLAYER_SIZE
+	
+	mov dx, offset BirdName
+	call OpenShowBmp
+	
+	ret
+endp InitializePlayer
 
 ; true if carry flag
 proc isInBoundary
@@ -217,34 +306,6 @@ proc isInBoundary
 	exitProc: 
 	ret 8
 endp isInBoundary
-
-
-proc ClearScreen
-	push ax
-	push cx
-	push di
-	
-	mov ax, 0B800h
-	mov es, ax
-	xor cx, cx
-	mov cx, 2000
-	mov di, 0
-	Clear: 
-		mov ah, 00000000b
-		mov al, ''
-		mov [es:di], ax
-		INC di
-		INC di
-	loop Clear
-	
-	pop di
-	pop cx
-	pop ax
-	
-	ret
-endp ClearScreen
-
-
  
 proc DrawVerticalLine
 	push si
@@ -270,7 +331,6 @@ DrawVertical:
 	ret
 endp DrawVerticalLine
 
- 
  ; cx = col dx= row al = color si = height di = width 
 proc Rect
 	push cx
@@ -295,7 +355,7 @@ NextVerticalLine:
 endp Rect
 
 
-proc OpenShowBmp near
+proc OpenShowBmp
 	
 	 
 	call OpenBmpFile
@@ -320,7 +380,7 @@ endp OpenShowBmp
 
 
 ; Read 54 bytes the Header
-proc ReadBmpHeader	near					
+proc ReadBmpHeader					
 	push cx
 	push dx
 	
@@ -335,10 +395,7 @@ proc ReadBmpHeader	near
 	ret
 endp ReadBmpHeader
 
-
-
-
-proc ReadBmpPalette near ; Read BMP file color palette, 256 colors * 4 bytes (400h)
+proc ReadBmpPalette ; Read BMP file color palette, 256 colors * 4 bytes (400h)
 						 ; 4 bytes for each color BGR + null)			
 	push cx
 	push dx
@@ -358,7 +415,7 @@ endp ReadBmpPalette
 ; Will move out to screen memory the colors
 ; video ports are 3C8h for number of first color
 ; and 3C9h for all rest
-proc CopyBmpPalette		near					
+proc CopyBmpPalette						
 										
 	push cx
 	push dx
@@ -391,7 +448,7 @@ endp CopyBmpPalette
 
 	
 ; input dx filename to open
-proc OpenBmpFile	near						 
+proc OpenBmpFile						 
 	mov ah, 3Dh
 	xor al, al
 	int 21h
@@ -405,9 +462,8 @@ proc OpenBmpFile	near
 	ret
 endp OpenBmpFile
 
-
 proc ShowBMP 
-; BMP graphics are saved upside-down.dsds
+; BMP graphics are saved upside-down.
 ; Read the graphic line by line (BmpRowSize lines in VGA format),
 ; displaying the lines from bottom to top.
 	push cx
@@ -469,7 +525,7 @@ proc ShowBMP
 endp ShowBMP 
 
 
-proc CloseBmpFile near
+proc CloseBmpFile
 	mov ah,3Eh
 	mov bx, [FileHandle]
 	int 21h
