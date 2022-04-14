@@ -224,15 +224,7 @@ proc Game
 		cmp dx, TRUE
 		je EndGame
 		
-		;cmp cx, 0
-		;je HandlePolesAllowed
-		;jmp HandlePolesForbidden
-		;HandlePolesAllowed: 
-			call HandlePoles
-		;	jmp AfterHandlePolesAllowed
-		;	mov cx, WAIT_FOR_POLES
-		;HandlePolesForbidden: 	
-		;AfterHandlePolesAllowed: 
+		call HandlePoles
 		
 		
 		pop cx
@@ -245,22 +237,87 @@ proc Game
 endp Game
 
 proc HandlePlayerCollision
+	; DX = row
+	; CX = column
+	mov dl, [PlayerYPosition]
+	
+	
+	mov cx, PLAYER_SIZE
+	@@LoopCollisionYAxis: 
+	push cx
+	
 	mov cx, PLAYER_COLUMN
 	inc cx
 	add cx, PLAYER_SIZE
-	xor dx,dx
 	
-	mov dl, [PlayerYPosition]
-	
+	inc dl
 	
 	mov ah, 0Dh
 	int 10h
 	
 	cmp al, 2
 	je SetDXRegister
+	
+	
+	pop cx
+	loop @@LoopCollisionYAxis
+	
+	mov cx, PLAYER_SIZE
+	dec cx
+	mov si, 0
+	LoopCollisionTopXAxis:
+		push cx
+		
+		mov cx, PLAYER_COLUMN
+		add cx, si
+		
+		mov dl, [PlayerYPosition]
+		dec dl
+		xor dh, dh
+		
+		mov ah, 0Dh
+		int 10h
+		
+		cmp al, 2
+		je SetDXRegister
+		
+		
+		sub cx, si
+		inc si
+		pop cx
+	loop LoopCollisionTopXAxis
+	
+	mov cx, PLAYER_SIZE
+	dec cx
+	mov si, 0
+	LoopCollisionBottomXAxis:
+		push cx
+		
+		mov cx, PLAYER_COLUMN
+		add cx, si
+		
+		mov dl, [PlayerYPosition]
+		add dl, PLAYER_SIZE
+		xor dh,dh
+		
+		mov ah, 0Dh
+		int 10h
+		
+		
+		cmp al, 2
+		je SetDXRegister
+		
+		
+		sub cx, si
+		inc si
+		pop cx
+	loop LoopCollisionBottomXAxis
+	
 	jmp endHandlePlayerCollision
+	
 	SetDXRegister: 
 		mov dx, TRUE
+		pop cx
 	endHandlePlayerCollision: 
 	
 	ret
@@ -283,6 +340,7 @@ endp InitializePoles
 
 proc HandlePoles
 	xor cx,cx
+
 	
 	call ErasePoles
 
