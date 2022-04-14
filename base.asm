@@ -24,6 +24,7 @@ WAIT_FOR_POLES = 100
 
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
+POLE_PIXEL_MOVEMENT = 2
 
 
 DATASEG
@@ -227,11 +228,10 @@ proc Game
 		;je HandlePolesAllowed
 		;jmp HandlePolesForbidden
 		;HandlePolesAllowed: 
-		;	call HandlePoles
+			call HandlePoles
 		;	jmp AfterHandlePolesAllowed
 		;	mov cx, WAIT_FOR_POLES
 		;HandlePolesForbidden: 	
-		;	pop cx
 		;AfterHandlePolesAllowed: 
 		
 		pop cx
@@ -242,6 +242,7 @@ proc Game
 		jmp exit
 	ret
 endp Game
+
 
 proc HandlePlayerCollision
 	mov cx, PLAYER_COLUMN
@@ -271,10 +272,10 @@ proc InitializePoles
 	call DrawLowPole
 	
 	mov cx, [SecondPoleXPosition]
-	call DrawHighPole
+	call DrawLowPole
 	
 	mov cx, [ThirdPoleXPosition]
-	call DrawMidPole
+	call DrawHighPole
 	
 	
 	ret
@@ -285,9 +286,9 @@ proc HandlePoles
 	
 	call ErasePoles
 
-	dec [FirstPoleXPosition]
-	dec [SecondPoleXPosition]
-	dec [ThirdPoleXPosition]
+	sub [FirstPoleXPosition], POLE_PIXEL_MOVEMENT
+	sub [SecondPoleXPosition], POLE_PIXEL_MOVEMENT
+	sub [ThirdPoleXPosition], POLE_PIXEL_MOVEMENT
 	
 	mov cx, [FirstPoleXPosition]
 	call DrawLowPole
