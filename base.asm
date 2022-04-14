@@ -16,11 +16,14 @@ BMP_WIDTH = 320
 
 PLAYER_SIZE = 15
 PLAYER_PIXEL_MOVEMENT = 5
-
+PLAYER_COLUMN = 20
 TRUE = 1
 FALSE = 0
 
 WAIT_FOR_POLES = 100
+
+POLE_COLOR = 2 ; Goes by graphic mode colors
+POLE_WIDTH = 20
 
 
 DATASEG
@@ -216,6 +219,10 @@ proc Game
 		cmp dx, TRUE
 		je EndGame
 		
+		call HandlePlayerCollision
+		cmp dx, TRUE
+		je EndGame
+		
 		;cmp cx, 0
 		;je HandlePolesAllowed
 		;jmp HandlePolesForbidden
@@ -236,6 +243,27 @@ proc Game
 	ret
 endp Game
 
+proc HandlePlayerCollision
+	mov cx, PLAYER_COLUMN
+	inc cx
+	add cx, PLAYER_SIZE
+	xor dx,dx
+	
+	mov dl, [PlayerYPosition]
+	
+	
+	mov ah, 0Dh
+	int 10h
+	
+	cmp al, 2
+	je SetDXRegister
+	jmp endHandlePlayerCollision
+	SetDXRegister: 
+		mov dx, TRUE
+	endHandlePlayerCollision: 
+	
+	ret
+endp HandlePlayerCollision
 
 proc InitializePoles
 	
@@ -278,13 +306,13 @@ endp HandlePoles
 
 proc ErasePoles
 	mov cx, [FirstPoleXPosition]
-	call ErasePole
+	call EraseLowPole
 	
 	mov cx, [SecondPoleXPosition]
-	call ErasePole
+	call EraseLowPole
 	
 	mov cx, [ThirdPoleXPosition]
-	call ErasePole
+	call EraseHighPole
 	
 	ret
 endp ErasePoles
@@ -367,7 +395,7 @@ proc MovePlayerUp
 endp MovePlayerUp
 
 proc DrawPlayer
-	mov [BmpLeft],20
+	mov [BmpLeft],PLAYER_COLUMN
 	
 	push ax
 	
@@ -387,11 +415,11 @@ endp DrawPlayer
 
 proc ErasePlayer
 	
-	mov cx, 5
+	mov cx, 20
 	mov dl, [PlayerYPosition]
 	mov al, 0
-	mov si, 50
-	mov di, 50
+	mov si, PLAYER_SIZE
+	mov di, PLAYER_SIZE
 	call Rect
 	
 	ret	
@@ -450,16 +478,16 @@ proc DrawLowPole
 	push si
 	push di
 	
-	mov al, 2
+	mov al, POLE_COLOR
 	mov dx, 0 ; row
 	mov si, 130 ; height
-	mov di, 20 ; width
+	mov di, POLE_WIDTH ; width
 	call Rect
 	
-	mov al, 2
+	mov al, POLE_COLOR
 	mov dx, 170 ; row
 	mov si, 30 ; height
-	mov di, 20 ; width
+	mov di, POLE_WIDTH ; width
 	call Rect
 	
 	pop di
@@ -477,16 +505,16 @@ proc DrawMidPole
 	push si
 	push di
 	
-	mov al, 2
+	mov al, POLE_COLOR
 	mov dx, 0 ; row
 	mov si, 75 ; height
-	mov di, 20 ; width
+	mov di, POLE_WIDTH ; width
 	call Rect
 	
-	mov al, 2
+	mov al, POLE_COLOR
 	mov dx, 115 ; row
 	mov si, 85 ; height
-	mov di, 20 ; width
+	mov di, POLE_WIDTH ; width
 	call Rect
 
 	pop di
@@ -505,15 +533,15 @@ proc DrawHighPole
 	push di
 	
 	mov dx, 0
-	mov al, 2
+	mov al, POLE_COLOR
 	mov si, 10
-	mov di, 20
+	mov di, POLE_WIDTH
 	call Rect
 
 	mov dx, 50
-	mov al, 2
+	mov al, POLE_COLOR
 	mov si, 150
-	mov di, 20
+	mov di, POLE_WIDTH
 	call Rect
 	
 	pop di
@@ -524,19 +552,87 @@ proc DrawHighPole
 	ret
 endp DrawHighPole 
 
-proc ErasePole 
+proc EraseLowPole 
 	
-	
+	push ax
+	push dx
+	push si
+	push di
 	
 	mov al, 0
 	mov dx, 0 ; row
-	mov si, 200 ; height
-	mov di, 20
+	mov si, 130 ; height
+	mov di, POLE_WIDTH ; width
 	call Rect
+	
+	mov al, 0
+	mov dx, 170 ; row
+	mov si, 30 ; height
+	mov di, POLE_WIDTH ; width
+	call Rect
+	
+	pop di
+	pop si
+	pop dx
+	pop ax
 
 	ret
-endp ErasePole 
+endp EraseLowPole 
 
+proc EraseMidPole 
+	push ax
+	push dx
+	push si
+	push di
+	
+	mov al, 0
+	mov dx, 0 ; row
+	mov si, 75 ; height
+	mov di, POLE_WIDTH ; width
+	call Rect
+	
+	mov al, 0
+	mov dx, 115 ; row
+	mov si, 85 ; height
+	mov di, POLE_WIDTH ; width
+	call Rect
+
+	pop di
+	pop si
+	pop dx
+	pop ax
+
+
+	ret
+
+endp EraseMidPole
+
+proc EraseHighPole
+	
+	push ax
+	push dx
+	push si
+	push di
+	
+	mov dx, 0
+	mov al, 0
+	mov si, 10
+	mov di, POLE_WIDTH
+	call Rect
+
+	mov dx, 50
+	mov al, 0
+	mov si, 150
+	mov di, POLE_WIDTH
+	call Rect
+	
+	pop di
+	pop si
+	pop dx
+	pop ax
+
+	ret
+endp EraseHighPole
 
 proc DrawVerticalLine
 	push si
@@ -772,6 +868,9 @@ proc  SetGraphic
 endp 	SetGraphic
 
 
+
+
+End start
 
 
 End start
