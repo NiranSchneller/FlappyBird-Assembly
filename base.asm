@@ -26,6 +26,9 @@ POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
 POLE_PIXEL_MOVEMENT = 3
 
+POLE_RECTANGLE_COLOR = 4
+POLE_RECTANGLE_HEIGHT = 5
+POLE_RECTANGLE_WIDTH = 5
 
 DATASEG
 	
@@ -56,6 +59,7 @@ DATASEG
 	FirstPoleXPosition dw 100 
 	SecondPoleXPosition dw 200
 	ThirdPoleXPosition dw 300
+	CurrentScore db 0
 	; first second and third just mean starting on the X axis when game Initializes
 CODESEG
  
@@ -233,15 +237,53 @@ proc Game
 			call HandlePoles
 			mov cx, POLE_WAIT_INTERVAL
 		HandlePolesForbidden: 
-			
-			
+		
+		;call HandleScore	
 		
 	jmp MainLoop
 	
 	EndGame: 
-		jmp exit
+		pop cx
+		;call PrintScore
+		jmp DeathScreen
 	ret
 endp Game
+
+
+
+proc PrintScore
+	
+	mov al, [CurrentScore]
+	xor ah,ah
+	
+	call ShowAxDecimal
+	
+	ret
+endp PrintScore
+
+proc HandleScore
+	mov ax, PLAYER_COLUMN
+	cmp ax, [FirstPoleXPosition]
+	ja IncrementScore
+	jmp EndHandleScore
+	
+	IncrementScore:
+		inc [CurrentScore]
+	
+	EndHandleScore: 
+		
+	ret
+endp HandleScore
+
+proc DeathScreen
+	
+	
+	
+	ret	
+endp DeathScreen
+
+
+
 
 proc HandlePlayerCollision
 	; DX = row
@@ -262,7 +304,7 @@ proc HandlePlayerCollision
 	mov ah, 0Dh
 	int 10h
 	
-	cmp al, 2
+	cmp al, POLE_COLOR
 	je SetDXRegister
 	
 	
@@ -285,7 +327,7 @@ proc HandlePlayerCollision
 		mov ah, 0Dh
 		int 10h
 		
-		cmp al, 2
+		cmp al, POLE_COLOR
 		je SetDXRegister
 		
 		
@@ -311,7 +353,7 @@ proc HandlePlayerCollision
 		int 10h
 		
 		
-		cmp al, 2
+		cmp al, POLE_COLOR
 		je SetDXRegister
 		
 		
@@ -550,6 +592,27 @@ proc DrawLowPole
 	mov di, POLE_WIDTH ; width
 	call Rect
 	
+	;push cx
+	;push dx
+	;
+	;mov al, POLE_RECTANGLE_COLOR
+	;mov dx, 140
+	;
+	;mov si, POLE_WIDTH
+	;shr si, 1
+	;
+	;add ax, si
+	;
+	;
+	;add cx, ax
+	;
+	;mov si, POLE_RECTANGLE_HEIGHT
+	;mov di, POLE_RECTANGLE_WIDTH
+	;call Rect
+	;
+	;pop dx
+	;pop cx
+	
 	mov al, POLE_COLOR
 	mov dx, 170 ; row
 	mov si, 30 ; height
@@ -630,7 +693,31 @@ proc EraseLowPole
 	mov si, 130 ; height
 	mov di, POLE_WIDTH ; width
 	call Rect
+
 	
+	;push cx
+	;push dx
+	;
+	;
+	;mov dx, 140
+	;
+	;mov si, POLE_WIDTH
+	;shr si, 1
+	;
+	;add ax, si
+	;
+	;
+	;add cx, ax
+	;
+	;mov al, 0
+	;mov si, POLE_RECTANGLE_HEIGHT
+	;mov di, POLE_RECTANGLE_WIDTH
+	;call Rect
+	;
+	;pop dx
+	;pop cx
+	
+
 	mov al, 0
 	mov dx, 170 ; row
 	mov si, 30 ; height
@@ -933,6 +1020,65 @@ proc  SetGraphic
 	ret
 endp 	SetGraphic
 
+
+proc ShowAxDecimal
+       push ax
+	   push bx
+	   push cx
+	   push dx
+	   
+	   ; check if negative
+	   test ax,08000h
+	   jz PositiveAx
+			
+	   ;  put '-' on the screen
+	   push ax
+	   mov dl,'-'
+	   mov ah,2
+	   int 21h
+	   pop ax
+
+	   neg ax ; make it positive
+PositiveAx:
+       mov cx,0   ; will count how many time we did push 
+       mov bx,10  ; the divider
+   
+put_mode_to_stack:
+       xor dx,dx
+       div bx
+       add dl,30h
+	   ; dl is the current LSB digit 
+	   ; we cant push only dl so we push all dx
+       push dx    
+       inc cx
+       cmp ax,9   ; check if it is the last time to div
+       jg put_mode_to_stack
+
+	   cmp ax,0
+	   jz pop_next  ; jump if ax was totally 0
+       add al,30h  
+	   mov dl, al    
+  	   mov ah, 2h
+	   int 21h        ; show first digit MSB
+	       
+pop_next: 
+       pop ax    ; remove all rest LIFO (reverse) (MSB to LSB)
+	   mov dl, al
+       mov ah, 2h
+	   int 21h        ; show all rest digits
+       loop pop_next
+		
+	   mov dl, ','
+       mov ah, 2h
+	   int 21h
+   
+	   pop dx
+	   pop cx
+	   pop bx
+	   pop ax
+	   
+	   ret
+endp ShowAxDecimal
 
 
 
