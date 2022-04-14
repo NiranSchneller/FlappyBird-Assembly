@@ -20,7 +20,7 @@ PLAYER_COLUMN = 20
 TRUE = 1
 FALSE = 0
 
-WAIT_FOR_POLES = 1
+POLE_WAIT_INTERVAL = 1
 
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
@@ -206,7 +206,7 @@ proc Game
 	call InitializePoles
 	;call ErasePoles
 	
-	mov cx, WAIT_FOR_POLES ; this will be wait untill poles are erased and put on screen
+	mov cx, POLE_WAIT_INTERVAL ; this will be wait untill poles are erased and put on screen
 	
 	MainLoop: 
 		push cx
@@ -231,7 +231,7 @@ proc Game
 		jmp HandlePolesForbidden
 		HandlePolesAllowed: 
 			call HandlePoles
-			mov cx, WAIT_FOR_POLES
+			mov cx, POLE_WAIT_INTERVAL
 		HandlePolesForbidden: 
 			
 			
