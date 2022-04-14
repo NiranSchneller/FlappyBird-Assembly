@@ -20,11 +20,11 @@ PLAYER_COLUMN = 20
 TRUE = 1
 FALSE = 0
 
-WAIT_FOR_POLES = 100
+WAIT_FOR_POLES = 1
 
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
-POLE_PIXEL_MOVEMENT = 2
+POLE_PIXEL_MOVEMENT = 3
 
 
 DATASEG
@@ -224,10 +224,17 @@ proc Game
 		cmp dx, TRUE
 		je EndGame
 		
-		call HandlePoles
-		
-		
 		pop cx
+		cmp cx, 0 
+		je HandlePolesAllowed 
+		dec cx
+		jmp HandlePolesForbidden
+		HandlePolesAllowed: 
+			call HandlePoles
+			mov cx, WAIT_FOR_POLES
+		HandlePolesForbidden: 
+			
+			
 		
 	jmp MainLoop
 	
