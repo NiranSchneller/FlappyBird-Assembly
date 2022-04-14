@@ -234,6 +234,7 @@ proc Game
 		;HandlePolesForbidden: 	
 		;AfterHandlePolesAllowed: 
 		
+		
 		pop cx
 		
 	jmp MainLoop
@@ -242,7 +243,6 @@ proc Game
 		jmp exit
 	ret
 endp Game
-
 
 proc HandlePlayerCollision
 	mov cx, PLAYER_COLUMN
@@ -869,9 +869,6 @@ proc  SetGraphic
 endp 	SetGraphic
 
 
-
-
-End start
 
 
 End start
