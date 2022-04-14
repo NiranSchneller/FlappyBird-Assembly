@@ -200,8 +200,7 @@ proc Game
 	call InitializePlayer
 	
 	call InitializePoles
-	mov cx, 300
-	call ErasePoles
+	;call ErasePoles
 	
 	mov cx, WAIT_FOR_POLES ; this will be wait untill poles are erased and put on screen
 	
@@ -217,16 +216,19 @@ proc Game
 		cmp dx, TRUE
 		je EndGame
 		
-		cmp cx, 0
-		je HandlePolesAllowed
-		jmp HandlePolesForbidden
-		HandlePolesAllowed: 
-			call HandlePoles
-			jmp AfterHandlePolesAllowed
-			mov cx, WAIT_FOR_POLES
-		HandlePolesForbidden: 	
-			pop cx
-		AfterHandlePolesAllowed: 
+		;cmp cx, 0
+		;je HandlePolesAllowed
+		;jmp HandlePolesForbidden
+		;HandlePolesAllowed: 
+		;	call HandlePoles
+		;	jmp AfterHandlePolesAllowed
+		;	mov cx, WAIT_FOR_POLES
+		;HandlePolesForbidden: 	
+		;	pop cx
+		;AfterHandlePolesAllowed: 
+		
+		pop cx
+		
 	jmp MainLoop
 	
 	EndGame: 
