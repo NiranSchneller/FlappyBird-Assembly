@@ -20,7 +20,7 @@ PLAYER_COLUMN = 20
 TRUE = 1
 FALSE = 0
 
-POLE_WAIT_INTERVAL = 2
+POLE_WAIT_INTERVAL = 1
 
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
@@ -60,10 +60,6 @@ DATASEG
 	SecondPoleXPosition dw 200
 	ThirdPoleXPosition dw 300
 	CurrentScore db 0
-	
-	PoleTypesArray db 1 dup (1,0,0, 1,0,0, 0,0,1)
-	; Explanation: each three spaces in the array indicate whether each pole (FirstPole, SecondPole and ThirdPole) is a low pole mid pole or high pole.
-	
 	; first second and third just mean starting on the X axis when game Initializes
 CODESEG
  
@@ -212,10 +208,7 @@ proc Game
 	call InitializePlayer
 	
 	call InitializePoles
-	
-	mov ah, 00h
-	int 16h
-	
+	;call ErasePoles
 	
 	mov cx, POLE_WAIT_INTERVAL ; this will be wait untill poles are erased and put on screen
 	
@@ -252,10 +245,7 @@ proc Game
 	EndGame: 
 		pop cx
 		;call PrintScore
-		mov ax, 1
-		int 33h
 		jmp DeathScreen
-		
 	ret
 endp Game
 
@@ -421,152 +411,16 @@ proc HandlePoles
 
 	ret
 endp HandlePoles
-; dx = 100, low
-; dx = 200, mid
-; dx = 300, high
-
-; comment: pass cx as the column
-proc PoleType
-
-	
-	LowPoleCheck: 
-		add cx, 3
-		
-		mov dx, 150 ; space should not be green 
-		
-		mov ah, 0Dh
-		int 10h
-		
-		cmp al, POLE_COLOR
-		je MidPoleCheck
-		
-		mov dx, 100
-		jmp EndPoleType
-		
-	MidPoleCheck: 
-		mov dx, 90
-		
-		xor al,al
-		mov ah, 0Dh
-		int 10h
-		
-		cmp al, POLE_COLOR
-		je HighPole
-		
-		mov dx, 200
-		jmp EndPoleType
-		
-	HighPole: 
-		mov dx, 300
-		
-	EndPoleType: 
-	ret
-endp PoleType
-
-proc EraseFirstPole
-	
-	xor dx,dx
-	
-	mov cx, [FirstPoleXPosition]
-	call PoleType
-	
-	cmp dx, 100
-	jne FirstNotEraseLow
-	
-	mov cx, [FirstPoleXPosition]
-	call EraseLowPole
-	jmp EndEraseFirstPole
-	FirstNotEraseLow: 
-		cmp dx, 200
-		jne FirstNotEraseMid
-		
-		mov cx, [FirstPoleXPosition]
-		call EraseMidPole
-		jmp EndEraseFirstPole
-	
-	FirstNotEraseMid:
-		mov cx, [FirstPoleXPosition]
-		call EraseHighPole
-		
-	
-	EndEraseFirstPole: 
-	
-	ret
-endp EraseFirstPole
-
-
-proc EraseSecondPole
-	
-	xor dx,dx
-	
-	mov cx, [SecondPoleXPosition]
-	call PoleType
-	
-	cmp dx, 100
-	jne SecondNotEraseLow
-	
-	mov cx, [SecondPoleXPosition]
-	call EraseLowPole
-	jmp EndEraseSecondPole
-	SecondNotEraseLow: 
-		cmp dx, 200
-		jne SecondNotEraseMid
-		
-		mov cx, [SecondPoleXPosition]
-		call EraseMidPole
-		jmp EndEraseSecondPole
-	
-	SecondNotEraseMid:
-		mov cx, [SecondPoleXPosition]
-		call EraseHighPole
-		
-	
-	EndEraseSecondPole: 
-	
-	ret
-endp EraseSecondPole
-
-
-proc EraseThirdPole
-	
-	xor dx,dx
-	
-	mov cx, [ThirdPoleXPosition]
-	call PoleType
-	
-	cmp dx, 100
-	jne ThirdNotEraseLow
-	
-	mov cx,  [ThirdPoleXPosition]
-	call EraseLowPole
-	jmp EndEraseThirdPole
-	ThirdNotEraseLow: 
-		cmp dx, 200
-		jne ThirdNotEraseMid
-		
-		mov cx,  [ThirdPoleXPosition]
-		call EraseMidPole
-		jmp EndEraseThirdPole
-	
-	ThirdNotEraseMid:
-		mov cx,  [ThirdPoleXPosition]
-		call EraseHighPole
-		
-	
-	EndEraseThirdPole: 
-	
-	ret
-endp EraseThirdPole
-
 
 proc ErasePoles
+	mov cx, [FirstPoleXPosition]
+	call EraseLowPole
 	
-	call EraseFirstPole
+	mov cx, [SecondPoleXPosition]
+	call EraseLowPole
 	
-	call EraseSecondPole
-	
-	call EraseThirdPole
-	
+	mov cx, [ThirdPoleXPosition]
+	call EraseHighPole
 	
 	ret
 endp ErasePoles
