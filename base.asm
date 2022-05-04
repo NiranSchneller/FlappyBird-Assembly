@@ -15,20 +15,22 @@ ERASE_SCREEN equ 'Erase.bmp'
 BMP_WIDTH = 320
 
 PLAYER_SIZE = 15
-PLAYER_PIXEL_MOVEMENT = 5
+PLAYER_AUTO_PIXEL_MOVEMENT = 4
+PLAYER_MANUAL_PIXEL_MOVEMENT = 30
 PLAYER_COLUMN = 20
 TRUE = 1
 FALSE = 0
-
-POLE_WAIT_INTERVAL = 1
-
+SPACE_HEIGHT = 70
+POLE_WAIT_INTERVAL = 0
+POLE_BOUNDARY = 0
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
-POLE_PIXEL_MOVEMENT = 3
+POLE_PIXEL_MOVEMENT = 2
 
-POLE_RECTANGLE_COLOR = 4
-POLE_RECTANGLE_HEIGHT = 5
-POLE_RECTANGLE_WIDTH = 5
+POLE_RECTANGLE_COLOR = 15
+
+
+BACKGROUND_COLOR = 9
 
 DATASEG
 	
@@ -57,10 +59,24 @@ DATASEG
 	PlayerYPosition db 100 ; Starting player position (half of screen )
 	
 	FirstPoleXPosition dw 100 
+	FirstPoleStartSpaceRow dw 10 ; start of space
+	FirstPoleEndSpaceRow dw 10 + SPACE_HEIGHT ; end of space
+	
 	SecondPoleXPosition dw 200
+	SecondPoleStartSpaceRow dw 10 ; start of space
+	SecondPoleEndSpaceRow dw 10 + SPACE_HEIGHT ; end of space
+	
 	ThirdPoleXPosition dw 300
+	ThirdPoleStartSpaceRow dw 10 ; start of space
+	ThirdPoleEndSpaceRow dw 10 + SPACE_HEIGHT ; end of space
+	
 	CurrentScore db 0
-	; first second and third just mean starting on the X axis when game Initializes
+
+	RndCurrentPos dw start
+
+	
+	
+
 CODESEG
  
 start:                          
@@ -196,25 +212,39 @@ proc HelpScreen
 	ret
 endp HelpScreen
 
+proc DrawScreen
+	mov cx, 0
+	mov dx, 0	
+	mov di, 320
+	mov si, 200
+	mov al, BACKGROUND_COLOR
+	call Rect
+
+	
+	ret
+endp DrawScreen
+
+
 proc Game
 	; initialize: 
 	
 	mov ax, 2h ; hide cursor
 	int 33h
 	
-	mov dx, offset EraseScreenName
-	call OpenShowBmp
+	call DrawScreen
 	
 	call InitializePlayer
 	
 	call InitializePoles
 	;call ErasePoles
+	mov ah, 00h ; clear buffer
+	int 16h
 	
 	mov cx, POLE_WAIT_INTERVAL ; this will be wait untill poles are erased and put on screen
 	
 	MainLoop: 
 		push cx
-		
+
 		call HandlePlayerMovement ; handles player movement
 		
 		xor dx,dx ; RESET DX
@@ -283,11 +313,89 @@ proc DeathScreen
 endp DeathScreen
 
 
+proc DrawPoleRectangle
+	push bp 
+	mov bp, sp
+	
+	Pole_Position equ [bp+4]
+	mov ax, Pole_Position
+	
+	mov dx, POLE_WIDTH
+	shr dx, 1
+	
+	sub ax, dx ; ax = Pole_Position + pole width/2
+	
+	mov cx, ax ; starting col
+	
+	; pos on x axis: ax
+	
+	mov si, 70
+	
+	mov ax, POLE_WIDTH
+	shr ax, 3
+	
+	mov di, dx
+	
 
+	mov dx, 10 ; starting row
+	
+	mov al, POLE_RECTANGLE_COLOR
+	
+	
+	call Rect
+	
+	
 
-proc HandlePlayerCollision
+	
+	
+	pop bp
+	ret 2
+endp DrawPoleRectangle 
+
+proc ErasePoleRectangle
+	push bp 
+	mov bp, sp
+	
+	Pole_Position equ [bp+4]
+	Pole_Space_height equ [bp+6]
+	mov ax, Pole_Position
+	
+	mov dx, POLE_WIDTH
+	shr dx, 1
+	
+	add ax, dx ; ax = Pole_Position + pole width/2
+	
+	mov cx, ax ; starting col
+	
+	; pos on x axis: ax
+	
+	mov si, 70
+	
+	mov ax, POLE_WIDTH
+	shr ax, 3
+	
+	mov di, dx
+	
+
+	mov dx, 10 ; starting row
+	
+	mov al, BACKGROUND_COLOR
+	
+	
+	call Rect
+
+	ret
+endp ErasePoleRectangle 
+
+proc ScanPlayerPerimeterForGivenColor 
+	push bp
+	mov bp, sp
+	
+	GIVEN_COLOR equ [bp+4]
 	; DX = row
 	; CX = column
+	
+	
 	mov dl, [PlayerYPosition]
 	
 	
@@ -304,7 +412,7 @@ proc HandlePlayerCollision
 	mov ah, 0Dh
 	int 10h
 	
-	cmp al, POLE_COLOR
+	cmp al, GIVEN_COLOR
 	je SetDXRegister
 	
 	
@@ -327,7 +435,7 @@ proc HandlePlayerCollision
 		mov ah, 0Dh
 		int 10h
 		
-		cmp al, POLE_COLOR
+		cmp al, GIVEN_COLOR
 		je SetDXRegister
 		
 		
@@ -353,7 +461,7 @@ proc HandlePlayerCollision
 		int 10h
 		
 		
-		cmp al, POLE_COLOR
+		cmp al, GIVEN_COLOR
 		je SetDXRegister
 		
 		
@@ -362,12 +470,21 @@ proc HandlePlayerCollision
 		pop cx
 	loop LoopCollisionBottomXAxis
 	
-	jmp endHandlePlayerCollision
+	jmp endScanPlayerPerimeterForGivenColor
 	
 	SetDXRegister: 
 		mov dx, TRUE
 		pop cx
-	endHandlePlayerCollision: 
+	endScanPlayerPerimeterForGivenColor: 
+	pop bp
+	ret 2 
+endp ScanPlayerPerimeterForGivenColor
+
+proc HandlePlayerCollision
+	push POLE_COLOR
+	
+	call ScanPlayerPerimeterForGivenColor
+	
 	
 	ret
 endp HandlePlayerCollision
@@ -375,52 +492,386 @@ endp HandlePlayerCollision
 proc InitializePoles
 	
 	mov cx, [FirstPoleXPosition]
-	call DrawLowPole
+	push [FirstPoleStartSpaceRow]
+	push [FirstPoleEndSpaceRow]
+	call InitializePole
 	
 	mov cx, [SecondPoleXPosition]
-	call DrawLowPole
+	push [SecondPoleStartSpaceRow]
+	push [SecondPoleEndSpaceRow]
+	call InitializePole
 	
 	mov cx, [ThirdPoleXPosition]
-	call DrawHighPole
-	
+	push [ThirdPoleStartSpaceRow]
+	push [ThirdPoleEndSpaceRow]
+	call InitializePole
 	
 	ret
 endp InitializePoles
 
+
+; make mask acording to bh size 
+; output Si = mask put 1 in all bh range
+; example  if bh 4 or 5 or 6 or 7 si will be 7
+; 		   if Bh 64 till 127 si will be 127
+Proc MakeMask    
+    push bx
+
+	mov si,1
+    
+@@again:
+	shr bh,1
+	cmp bh,0
+	jz @@EndProc
+	
+	shl si,1 ; add 1 to si at right
+	inc si
+	
+	jmp @@again
+	
+@@EndProc:
+    pop bx
+	ret
+endp  MakeMask
+
+
+; Description  : get RND between any bl and bh includs (max 0 -255)
+; Input        : 1. Bl = min (from 0) , BH , Max (till 255)
+; 			     2. RndCurrentPos a  word variable,   help to get good rnd number
+; 				 	Declre it at DATASEG :  RndCurrentPos dw ,0
+;				 3. EndOfCsLbl: is label at the end of the program one line above END start		
+; Output:        Al - rnd num from bl to bh  (example 50 - 150)
+; More Info:
+; 	Bl must be less than Bh 
+; 	in order to get good random value again and agin the Code segment size should be 
+; 	at least the number of times the procedure called at the same second ... 
+; 	for example - if you call to this proc 50 times at the same second  - 
+; 	Make sure the cs size is 50 bytes or more 
+; 	(if not, make it to be more) 
+proc RandomByCs
+    push es
+	push si
+	push di
+	
+	mov ax, 40h
+	mov	es, ax
+	
+	sub bh,bl  ; we will make rnd number between 0 to the delta between bl and bh
+			   ; Now bh holds only the delta
+	cmp bh,0
+	jz @@ExitP
+ 
+	mov di, [word RndCurrentPos]
+	call MakeMask ; will put in si the right mask according the delta (bh) (example for 28 will put 31)
+	
+RandLoop: ;  generate random number 
+	mov ax, [es:06ch] ; read timer counter
+	mov ah, [byte cs:di] ; read one byte from memory (from semi random byte at cs)
+	xor al, ah ; xor memory and counter
+	
+	; Now inc di in order to get a different number next time
+	inc di
+	cmp di,(EndOfCsLbl - start - 1)
+	jb @@Continue
+	mov di, offset start
+@@Continue:
+	mov [word RndCurrentPos], di
+	
+	and ax, si ; filter result between 0 and si (the mask)
+	cmp al,bh    ;do again if  above the delta
+	ja RandLoop
+	
+	add al,bl  ; add the lower limit to the rnd num
+		 
+@@ExitP:	
+	pop di
+	pop si
+	pop es
+	ret
+endp RandomByCs
+
+
+
+
+proc ModifyStartAndEndSpaceVariablesFirst
+	push bp
+	mov bp, sp
+	
+	START_SPACE equ [bp+4]
+	
+	mov ax, START_SPACE
+	mov [FirstPoleStartSpaceRow], ax
+	
+	mov ax, START_SPACE
+	add ax, SPACE_HEIGHT
+	
+	mov [FirstPoleEndSpaceRow], ax
+	
+	
+	
+	pop bp
+	ret 2
+endp ModifyStartAndEndSpaceVariablesFirst
+
+proc ModifyStartAndEndSpaceVariablesSecond
+	push bp
+	mov bp, sp
+	
+	START_SPACE equ [bp+4]
+	
+	
+	mov ax, START_SPACE
+	mov [SecondPoleStartSpaceRow], ax
+	
+	mov ax, START_SPACE
+	add ax, SPACE_HEIGHT
+	
+	mov [SecondPoleEndSpaceRow], ax
+	
+	
+	
+	
+	pop bp
+	ret 2
+endp ModifyStartAndEndSpaceVariablesSecond
+
+proc ModifyStartAndEndSpaceVariablesThird
+	push bp
+	mov bp, sp
+	
+	START_SPACE equ [bp+4]
+	
+	
+	mov ax, START_SPACE
+	mov [ThirdPoleStartSpaceRow], ax
+	
+	mov ax, START_SPACE
+	add ax, SPACE_HEIGHT
+	
+	mov [ThirdPoleEndSpaceRow], ax
+	
+	
+	
+	
+	
+	pop bp
+	ret 2
+endp ModifyStartAndEndSpaceVariablesThird
+
+
+
+proc ChangeFirstPolePositionToMax
+	push bp
+	mov bp, sp
+	
+	POLE_ADDRESS equ [bp+4]
+	
+	mov bx, POLE_ADDRESS
+	
+	mov ax, [bx]
+	cmp ax, POLE_BOUNDARY
+	jle ChangeFirstPoleToMax
+	jmp EndFirstPoleChangePosition
+	ChangeFirstPoleToMax: 
+	
+	
+		mov cx, [FirstPoleXPosition]
+		push [FirstPoleStartSpaceRow]
+		push [FirstPoleEndSpaceRow]
+		
+		call EndPole
+		
+		mov ax, 320 ; screen width
+		sub ax, POLE_WIDTH
+		mov [bx], ax
+		
+		mov bl, 0
+		mov ax, 200
+		
+		sub ax, SPACE_HEIGHT
+		mov bh, al ; 200 - space-height
+		
+		dec bh
+		
+		call RandomByCs
+		
+		
+		push ax
+		call ModifyStartAndEndSpaceVariablesFirst
+		
+		mov cx, [FirstPoleXPosition]
+		push [FirstPoleStartSpaceRow]
+		push [FirstPoleEndSpaceRow]
+		
+		call InitializePole
+		call HandlePoleInconsistency
+	
+	
+	EndFirstPoleChangePosition: 	
+	pop bp
+	ret 2
+endp ChangeFirstPolePositionToMax
+
+proc ChangeSecondPolePositionToMax
+	push bp
+	mov bp, sp
+	
+	POLE_ADDRESS equ [bp+4]
+	
+	mov bx, POLE_ADDRESS
+	
+	mov ax, [bx]
+	cmp ax, POLE_BOUNDARY
+	jle ChangeSecondPoleToMax
+	jmp EndSecondPoleChangePosition
+	ChangeSecondPoleToMax: 
+		mov cx, [SecondPoleXPosition]
+		push [SecondPoleStartSpaceRow]
+		push [SecondPoleEndSpaceRow]
+		call EndPole
+		
+		mov ax, 320 ; screen width
+		sub ax, POLE_WIDTH
+		mov [bx], ax
+		
+
+		mov bl, 0
+		mov ax, 200
+		sub ax, SPACE_HEIGHT
+		mov bh, al ; 200 - space-height
+		dec bh
+
+		call RandomByCs
+
+		push ax
+		call ModifyStartAndEndSpaceVariablesSecond
+	
+		mov cx, [SecondPoleXPosition]
+		push [SecondPoleStartSpaceRow]
+		push [SecondPoleEndSpaceRow]
+		
+		call InitializePole
+		call HandlePoleInconsistency
+	
+	
+	EndSecondPoleChangePosition: 	
+	pop bp
+	ret 2
+endp ChangeSecondPolePositionToMax
+
+
+proc ChangeThirdPolePositionToMax
+	push bp
+	mov bp, sp
+	
+	POLE_ADDRESS equ [bp+4]
+	
+	mov bx, POLE_ADDRESS
+	
+	mov ax, [bx]
+	cmp ax, POLE_BOUNDARY
+	jle ChangeThirdPoleToMax
+	jmp EndThirdPoleChangePosition
+	ChangeThirdPoleToMax: 
+		mov cx, [ThirdPoleXPosition]
+		push [ThirdPoleStartSpaceRow]
+		push [ThirdPoleEndSpaceRow]
+		call EndPole
+		
+		mov ax, 320 ; screen width
+		sub ax, POLE_WIDTH
+		mov [bx], ax
+		
+		
+		mov bl, 0
+		mov ax, 200
+		sub ax, SPACE_HEIGHT
+		mov bh, al ; 200 - space-height
+		dec bh
+
+		call RandomByCs
+
+		
+		push ax
+		call ModifyStartAndEndSpaceVariablesThird
+	
+	
+		mov cx, [ThirdPoleXPosition]
+		push [ThirdPoleStartSpaceRow]
+		push [ThirdPoleEndSpaceRow]
+		
+		call InitializePole
+		call HandlePoleInconsistency
+	
+	EndThirdPoleChangePosition: 	
+	pop bp
+	ret 2
+endp ChangeThirdPolePositionToMax
+
+
+proc HandleIllegalPolePositions
+	push offset FirstPoleXPosition
+	call ChangeFirstPolePositionToMax
+	
+	push offset SecondPoleXPosition
+	call ChangeSecondPolePositionToMax
+	
+	push offset ThirdPoleXPosition
+	call ChangeThirdPolePositionToMax
+
+	ret	
+endp HandleIllegalPolePositions
+
+
 proc HandlePoles
 	xor cx,cx
-
 	
-	call ErasePoles
+	
+	
+	
+	call HandleIllegalPolePositions
+
 
 	sub [FirstPoleXPosition], POLE_PIXEL_MOVEMENT
 	sub [SecondPoleXPosition], POLE_PIXEL_MOVEMENT
 	sub [ThirdPoleXPosition], POLE_PIXEL_MOVEMENT
 	
 	mov cx, [FirstPoleXPosition]
-	call DrawLowPole
-	
+	push [FirstPoleStartSpaceRow]
+	push [FirstPoleEndSpaceRow]
+	call DrawPole
 	
 	mov cx, [SecondPoleXPosition]
-	call DrawLowPole
-	
+	push [SecondPoleStartSpaceRow]
+	push [SecondPoleEndSpaceRow]
+	call DrawPole
 	
 	mov cx, [ThirdPoleXPosition]
-	call DrawHighPole
-	
+	push [ThirdPoleStartSpaceRow]
+	push [ThirdPoleEndSpaceRow]
+	call DrawPole
+
+
+	call ErasePoles
 
 	ret
 endp HandlePoles
 
 proc ErasePoles
 	mov cx, [FirstPoleXPosition]
-	call EraseLowPole
+	push [FirstPoleStartSpaceRow]
+	push [FirstPoleEndSpaceRow]
+	call ErasePole
 	
 	mov cx, [SecondPoleXPosition]
-	call EraseLowPole
+	push [SecondPoleStartSpaceRow]
+	push [SecondPoleEndSpaceRow]
+	call ErasePole
 	
 	mov cx, [ThirdPoleXPosition]
-	call EraseHighPole
+	push [ThirdPoleStartSpaceRow]
+	push [ThirdPoleEndSpaceRow]
+	call ErasePole
 	
 	ret
 endp ErasePoles
@@ -452,6 +903,7 @@ endp HandleIllegalPlayerPosition
 
 proc HandlePlayerMovement
 
+	
 	mov ah, 1h
 	int 16h
 	jnz KeyPressed ; if a key was pressed (ZF = 0) 
@@ -460,33 +912,25 @@ proc HandlePlayerMovement
 	KeyPressed: 
 		mov ah, 00h ; clear buffer
 		int 16h
-		cmp al, 's' 
-		je DownKeyPressed
-		cmp al, 'S'
-		je DownKeyPressed
 		
-		
-		cmp al, 'w'
-		je UpKeyPressed
-		cmp al, 'W'
-		je UpKeyPressed
+		cmp al, 32
+		je SpaceKeyPressed
 		
 		jmp KeyNotPressed
-	
-	DownKeyPressed: 
-		call MovePlayerDown
-		jmp KeyNotPressed
-	UpKeyPressed: 
+	SpaceKeyPressed: 
 		call MovePlayerUp
+		jmp EndHandlePlayerMovement
 	KeyNotPressed: 
-		
+		call MovePlayerDown
+	EndHandlePlayerMovement: 
+	
 	ret
 endp HandlePlayerMovement
 
 proc MovePlayerDown
 	
 	call ErasePlayer
-	add [PlayerYPosition], PLAYER_PIXEL_MOVEMENT
+	add [PlayerYPosition], PLAYER_AUTO_PIXEL_MOVEMENT
 	
 	call DrawPlayer
 	
@@ -496,7 +940,7 @@ endp MovePlayerDown
 proc MovePlayerUp
 	
 	call ErasePlayer
-	sub [PlayerYPosition], PLAYER_PIXEL_MOVEMENT
+	sub [PlayerYPosition], PLAYER_MANUAL_PIXEL_MOVEMENT
 	call DrawPlayer
 	
 	ret
@@ -525,7 +969,7 @@ proc ErasePlayer
 	
 	mov cx, 20
 	mov dl, [PlayerYPosition]
-	mov al, 0
+	mov al, BACKGROUND_COLOR
 	mov si, PLAYER_SIZE
 	mov di, PLAYER_SIZE
 	call Rect
@@ -580,97 +1024,106 @@ proc isInBoundary
 	ret 8
 endp isInBoundary
 
-proc DrawLowPole 
+proc ErasePole
+	push bp
+	mov bp, sp
+	
+	END_OF_SPACE equ [bp+4]
+	START_OF_SPACE equ [bp+6]
+
+	
 	push ax
 	push dx
 	push si
 	push di
 	
-	mov al, POLE_COLOR
-	mov dx, 0 ; row
-	mov si, 130 ; height
-	mov di, POLE_WIDTH ; width
+	
+	
+	mov ax, POLE_WIDTH
+	sub ax, POLE_PIXEL_MOVEMENT
+	
+	add cx, ax
+	mov di, ax
+
+	
+	
+	mov dx, 0
+	mov al, BACKGROUND_COLOR
+	mov si, START_OF_SPACE
 	call Rect
 	
-	;push cx
-	;push dx
-	;
-	;mov al, POLE_RECTANGLE_COLOR
-	;mov dx, 140
-	;
-	;mov si, POLE_WIDTH
-	;shr si, 1
-	;
-	;add ax, si
-	;
-	;
-	;add cx, ax
-	;
-	;mov si, POLE_RECTANGLE_HEIGHT
-	;mov di, POLE_RECTANGLE_WIDTH
-	;call Rect
-	;
-	;pop dx
-	;pop cx
+
+	mov ax, 200 ; graphic height
+	sub ax, END_OF_SPACE
 	
-	mov al, POLE_COLOR
-	mov dx, 170 ; row
-	mov si, 30 ; height
-	mov di, POLE_WIDTH ; width
+	mov si, ax
+	
+	mov ax, POLE_WIDTH
+	sub ax, POLE_PIXEL_MOVEMENT
+	
+	mov di, ax	
+	
+	mov dx, END_OF_SPACE
+	mov al, BACKGROUND_COLOR
 	call Rect
 	
 	pop di
 	pop si
 	pop dx
 	pop ax
-	
-	ret
-endp DrawLowPole 
 
-proc DrawMidPole 
+	pop bp
+	ret 4
+endp ErasePole
+
+
+proc DrawPole
+	push bp
+	mov bp, sp
+	
+	END_OF_SPACE equ [bp+4]
+	START_OF_SPACE equ [bp+6]
+
 	
 	push ax
 	push dx
 	push si
 	push di
 	
-	mov al, POLE_COLOR
-	mov dx, 0 ; row
-	mov si, 75 ; height
-	mov di, POLE_WIDTH ; width
-	call Rect
 	
-	mov al, POLE_COLOR
-	mov dx, 115 ; row
-	mov si, 85 ; height
-	mov di, POLE_WIDTH ; width
-	call Rect
-
-	pop di
-	pop si
-	pop dx
-	pop ax
-
-	ret
-endp DrawMidPole 
-
-proc DrawHighPole
 	
-	push ax
-	push dx
-	push si
-	push di
+	mov ax, POLE_WIDTH
+	sub ax, POLE_PIXEL_MOVEMENT
+	
+	mov bx, POLE_WIDTH
+	sub bx, ax
+	mov ax, bx
+	
+	
+	
+	
+	sub cx, ax
+	mov di, ax
+	
+	
+	
 	
 	mov dx, 0
 	mov al, POLE_COLOR
-	mov si, 10
-	mov di, POLE_WIDTH
+	mov si, START_OF_SPACE
 	call Rect
+	
 
-	mov dx, 50
+	mov ax, 200 ; graphic height
+	sub ax, END_OF_SPACE
+	
+	mov si, ax
+	
+
+	
+	
+	mov dx, END_OF_SPACE
 	mov al, POLE_COLOR
-	mov si, 150
-	mov di, POLE_WIDTH
 	call Rect
 	
 	pop di
@@ -678,104 +1131,45 @@ proc DrawHighPole
 	pop dx
 	pop ax
 
-	ret
-endp DrawHighPole 
+	pop bp
+	ret 4
+endp DrawPole
 
-proc EraseLowPole 
+proc InitializePole
+	push bp
+	mov bp, sp
+	
+	
+	
+	END_OF_SPACE equ [bp+4]
+	START_OF_SPACE equ [bp+6]
+
+	
 	
 	push ax
 	push dx
 	push si
 	push di
 	
-	mov al, 0
-	mov dx, 0 ; row
-	mov si, 130 ; height
-	mov di, POLE_WIDTH ; width
-	call Rect
-
 	
-	;push cx
-	;push dx
-	;
-	;
-	;mov dx, 140
-	;
-	;mov si, POLE_WIDTH
-	;shr si, 1
-	;
-	;add ax, si
-	;
-	;
-	;add cx, ax
-	;
-	;mov al, 0
-	;mov si, POLE_RECTANGLE_HEIGHT
-	;mov di, POLE_RECTANGLE_WIDTH
-	;call Rect
-	;
-	;pop dx
-	;pop cx
 	
-
-	mov al, 0
-	mov dx, 170 ; row
-	mov si, 30 ; height
-	mov di, POLE_WIDTH ; width
-	call Rect
-	
-	pop di
-	pop si
-	pop dx
-	pop ax
-
-	ret
-endp EraseLowPole 
-
-proc EraseMidPole 
-	push ax
-	push dx
-	push si
-	push di
-	
-	mov al, 0
-	mov dx, 0 ; row
-	mov si, 75 ; height
-	mov di, POLE_WIDTH ; width
-	call Rect
-	
-	mov al, 0
-	mov dx, 115 ; row
-	mov si, 85 ; height
-	mov di, POLE_WIDTH ; width
-	call Rect
-
-	pop di
-	pop si
-	pop dx
-	pop ax
-
-
-	ret
-
-endp EraseMidPole
-
-proc EraseHighPole
-	
-	push ax
-	push dx
-	push si
-	push di
 	
 	mov dx, 0
-	mov al, 0
-	mov si, 10
+	mov al, POLE_COLOR
+	mov si, START_OF_SPACE
 	mov di, POLE_WIDTH
 	call Rect
+	
 
-	mov dx, 50
-	mov al, 0
-	mov si, 150
+	mov ax, 200 ; graphic height
+	sub ax, END_OF_SPACE
+	
+	mov si, ax
+	
+	
+	
+	mov dx, END_OF_SPACE
+	mov al, POLE_COLOR
 	mov di, POLE_WIDTH
 	call Rect
 	
@@ -784,8 +1178,64 @@ proc EraseHighPole
 	pop dx
 	pop ax
 
+	pop bp
+	ret 4
+	
+
+endp InitializePole
+
+proc HandlePoleInconsistency
+	
+
 	ret
-endp EraseHighPole
+endp HandlePoleInconsistency
+
+
+proc EndPole
+	push bp
+	mov bp, sp
+	
+	;call HandlePoleInconsistency
+	
+	END_OF_SPACE equ [bp+4]
+	START_OF_SPACE equ [bp+6]
+
+	
+	push ax
+	push dx
+	push si
+	push di
+	
+	
+	
+	
+	mov dx, 0
+	mov al, BACKGROUND_COLOR
+	mov si, START_OF_SPACE
+	mov di, POLE_WIDTH
+	call Rect
+	
+
+	mov ax, 200 ; graphic height
+	sub ax, END_OF_SPACE
+	
+	mov si, ax
+	
+	
+	
+	mov dx, END_OF_SPACE
+	mov al, BACKGROUND_COLOR
+	mov di, POLE_WIDTH
+	call Rect
+	
+	pop di
+	pop si
+	pop dx
+	pop ax
+
+	pop bp
+	ret 4
+endp EndPole
 
 proc DrawVerticalLine
 	push si
@@ -1081,5 +1531,5 @@ pop_next:
 endp ShowAxDecimal
 
 
-
+EndOfCsLbl:
 End start
