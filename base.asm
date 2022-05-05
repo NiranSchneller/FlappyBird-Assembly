@@ -15,7 +15,7 @@ BIRD_UP equ 'BirdUp.bmp'
 ERASE_SCREEN equ 'Erase.bmp'
 SCORE_TABLE equ 'Scores.txt'
 BMP_WIDTH = 320
-
+GAME_OVER equ 'GO.bmp'
 PLAYER_SIZE = 15
 PLAYER_AUTO_PIXEL_MOVEMENT = 4
 PLAYER_MANUAL_PIXEL_MOVEMENT = 30
@@ -40,6 +40,7 @@ DATASEG
 	BirdUpName db BIRD_UP, 0
 	EraseScreenName db ERASE_SCREEN, 0
 	ScoresName db SCORE_TABLE, 0 
+	GameOverName db GAME_OVER, 0
 	FileHandle	dw ?
 	Header 	    db 54 dup(0)
 	Palette 	db 400h dup (0)
@@ -375,7 +376,16 @@ endp HandleScore
 
 proc DeathScreen
 	
+	call DrawScreen
 	
+	mov [BmpLeft], 53
+	mov [BmpTop], 53
+	
+	mov [BmpColSize], 205
+	mov [BmpRowSize], 44
+	
+	mov dx, offset GameOverName
+	call OpenShowBmp
 	
 	ret	
 endp DeathScreen
@@ -838,7 +848,6 @@ proc MovePlayerUp
 	sub [PlayerYPosition], PLAYER_MANUAL_PIXEL_MOVEMENT
 	push offset BirdName
 	call DrawPlayer
-	
 	ret
 endp MovePlayerUp
 
