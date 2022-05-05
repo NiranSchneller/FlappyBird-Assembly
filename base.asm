@@ -611,6 +611,9 @@ proc ChangePolePositionToMax
 		
 		call EndPole
 		
+		call HandlePoleInconsistency
+
+		
 		mov ax, 320 ; screen width
 		sub ax, POLE_WIDTH
 		mov bx, POLE_ADDRESS
@@ -649,7 +652,6 @@ proc ChangePolePositionToMax
 		push [FirstPoleEndSpaceRow]
 		
 		call InitializePole
-		call HandlePoleInconsistency
 		
 		mov bx, IS_BEFORE_POLE
 		mov ax, TRUE
@@ -1074,6 +1076,15 @@ proc InitializePole
 endp InitializePole
 
 proc HandlePoleInconsistency
+	
+	mov cx, 320
+	sub cx, POLE_PIXEL_MOVEMENT
+	
+	mov dx, 0
+	mov si, 200
+	mov di, POLE_PIXEL_MOVEMENT
+	mov al, BACKGROUND_COLOR
+	call Rect
 	
 
 	ret
