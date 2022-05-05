@@ -22,7 +22,6 @@ PLAYER_MANUAL_PIXEL_MOVEMENT = 30
 PLAYER_COLUMN = 30
 TRUE = 1
 FALSE = 0
-SPACE_HEIGHT = 70
 POLE_WAIT_INTERVAL = 0
 POLE_BOUNDARY = 0
 POLE_COLOR = 2 ; Goes by graphic mode colors
@@ -59,17 +58,17 @@ DATASEG
 	
 	PlayerYPosition db 100 ; Starting player position (half of screen )
 	
-	FirstPoleXPosition dw 100 
+	FirstPoleXPosition dw 100
 	FirstPoleStartSpaceRow dw 10 ; start of space
-	FirstPoleEndSpaceRow dw 10 + SPACE_HEIGHT ; end of space
+	FirstPoleEndSpaceRow dw 10 + MAXIMUM_SPACE_HEIGHT ; end of space
 	
 	SecondPoleXPosition dw 200
 	SecondPoleStartSpaceRow dw 10 ; start of space
-	SecondPoleEndSpaceRow dw 10 + SPACE_HEIGHT ; end of space
+	SecondPoleEndSpaceRow dw 10 + MAXIMUM_SPACE_HEIGHT ; end of space
 	
 	ThirdPoleXPosition dw 300
 	ThirdPoleStartSpaceRow dw 10 ; start of space
-	ThirdPoleEndSpaceRow dw 10 + SPACE_HEIGHT ; end of space
+	ThirdPoleEndSpaceRow dw 10 + MAXIMUM_SPACE_HEIGHT ; end of space
 	
 	CurrentScore db 0
 	Temp db 0
@@ -692,6 +691,8 @@ endp ModifyPoleParameters
 
 
 proc HandleIllegalPolePositions
+
+	
 	push offset FirstPoleXPosition
 	push offset FirstPoleStartSpaceRow
 	push offset FirstPoleEndSpaceRow
@@ -709,6 +710,9 @@ proc HandleIllegalPolePositions
 	push offset ThirdPoleEndSpaceRow
 	push offset IsBeforeThirdPole
 	call ChangePolePositionToMax
+	
+	
+	
 	
 	ret	
 endp HandleIllegalPolePositions
@@ -822,7 +826,7 @@ proc MovePlayerDown
 	
 	call ErasePlayer
 	add [PlayerYPosition], PLAYER_AUTO_PIXEL_MOVEMENT
-	
+	push offset BirdName
 	call DrawPlayer
 	
 	ret
@@ -832,12 +836,18 @@ proc MovePlayerUp
 	
 	call ErasePlayer
 	sub [PlayerYPosition], PLAYER_MANUAL_PIXEL_MOVEMENT
+	push offset BirdName
 	call DrawPlayer
 	
 	ret
 endp MovePlayerUp
 
 proc DrawPlayer
+	push bp
+	mov bp, sp
+	
+	BMP_ADDRESS equ [bp+4]
+	
 	mov [BmpLeft],PLAYER_COLUMN
 	
 	push ax
@@ -850,10 +860,11 @@ proc DrawPlayer
 	mov [BmpColSize],PLAYER_SIZE
 	mov [BmpRowSize],PLAYER_SIZE
 	
-	mov dx, offset BirdName
+	mov dx, BMP_ADDRESS
 	call OpenShowBmp
 	
-	ret
+	pop bp
+	ret 2
 endp DrawPlayer
 
 proc ErasePlayer
@@ -1031,9 +1042,9 @@ proc InitializePole
 	mov bp, sp
 	
 	
-	
+	START_OF_SPACE equ [bp+6]	
 	END_OF_SPACE equ [bp+4]
-	START_OF_SPACE equ [bp+6]
+
 
 	
 	
