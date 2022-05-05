@@ -376,13 +376,13 @@ endp HandleScore
 
 proc DeathScreen
 	
-	call DrawScreen
+	;call DrawScreen
 	
 	mov [BmpLeft], 53
 	mov [BmpTop], 53
 	
-	mov [BmpColSize], 205
-	mov [BmpRowSize], 44
+	mov [BmpColSize], 192
+	mov [BmpRowSize], 32
 	
 	mov dx, offset GameOverName
 	call OpenShowBmp
