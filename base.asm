@@ -5,6 +5,8 @@ MODEL small
 
 STACK 100h
 
+
+
 START_SCREEN equ 'Start.bmp'
 MAIN_SCREEN equ 'Main.bmp'
 HELP_SCREEN equ 'Help.bmp'
@@ -26,7 +28,8 @@ POLE_BOUNDARY = 0
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
 POLE_PIXEL_MOVEMENT = 2
-
+MINIMUM_SPACE_HEIGHT = 50
+MAXIMUM_SPACE_HEIGHT = 90
 BACKGROUND_COLOR = 9
 
 DATASEG
@@ -69,10 +72,13 @@ DATASEG
 	ThirdPoleEndSpaceRow dw 10 + SPACE_HEIGHT ; end of space
 	
 	CurrentScore db 0
-
+	Temp db 0
+	
 	RndCurrentPos dw start
 
-	IsInPipeZone db FALSE
+	IsBeforeFirstPole db TRUE
+	IsBeforeSecondPole db TRUE ; changes when pole respawns
+	IsBeforeThirdPole db TRUE
 
 	
 	
@@ -281,22 +287,19 @@ endp Game
 
 proc HandleScoreTable
 	
-	mov dx, offset ScoresName
-	call OpenFile
+	;mov dx, offset ScoresName
+	;call OpenFile
+	;
+	;;call InputScoreIntoScoreTable
+	;
 	
-	;call InputScoreIntoScoreTable
+	mov al, [CurrentScore]
+	call ShowAxDecimal
 	
-	mov ah, 40h
-	mov bx, [FileHandle]
-	mov cx, 2
-	mov dx, offset CurrentScore
-	add dx, '0'
-	int 21h
-
-	
-	
-	mov dx, offset ScoresName
-	call CloseFile
+	;
+	;
+	;mov dx, offset ScoresName
+	;call CloseFile
 	
 
 	ret
@@ -304,37 +307,28 @@ endp HandleScoreTable
 
 proc InputScoreIntoScoreTable
 	
-	mov ah, 40h
-	mov bx, [FileHandle]
-	mov cx, 2
-	mov dx, offset CurrentScore
-	add dx, '0'
-	int 21h
+	
 
+	
+	
 	ret
 endp InputScoreIntoScoreTable
 
-proc HandleIsInPipeZone
+
+
+proc HandleIsBeforePole
 	push bp
 	mov bp, sp
 	
-	POLE_ADDRESS equ [bp+4]
+	POLE_ADDRESS equ [bp+6]
+	IS_BEFORE_POLE equ [bp+4]
 	
-	cmp [IsInPipeZone], TRUE
-	je HandleScoreIncrementation
+	mov bx, IS_BEFORE_POLE
 	
+	mov ax, TRUE
+	cmp [bx], ax
+	jne EndHandlingScoreVariable
 	
-	mov bx, POLE_ADDRESS
-	mov ax, [bx]
-	mov bx, [PLAYER_COLUMN]
-		
-	cmp bx, ax ; PLAYER_COLUMN > POLE_ADDRESS
-	ja ToggleTrigger
-	jmp EndHandlingScoreVariable
-
-	ToggleTrigger: 
-		mov [IsInPipeZone], TRUE
-		
 	HandleScoreIncrementation: 
 	
 		
@@ -349,27 +343,31 @@ proc HandleIsInPipeZone
 			IncrementScore:
 				
 				inc [CurrentScore]
-				mov [IsInPipeZone], FALSE
-	
+				mov bx, IS_BEFORE_POLE
+				mov ax, FALSE
+				mov [bx], ax
 	EndHandlingScoreVariable: 
 	
 	pop bp	
-	ret 2
-endp HandleIsInPipeZone
+	ret 4
+endp HandleIsBeforePole
 
 
 proc HandleScore
 
 	push offset FirstPoleXPosition
-	call HandleIsInPipeZone
+	push offset IsBeforeFirstPole
+	call HandleIsBeforePole
 	
 	
 	push offset SecondPoleXPosition
-	call HandleIsInPipeZone
+	push offset IsBeforeSecondPole
+	call HandleIsBeforePole
 	
 	
 	push offset ThirdPoleXPosition
-	call HandleIsInPipeZone
+	push offset IsBeforeThirdPole
+	call HandleIsBeforePole
 	
 	
 	
@@ -586,114 +584,65 @@ RandLoop: ;  generate random number
 	ret
 endp RandomByCs
 
-
-
-
-proc ModifyStartAndEndSpaceVariablesFirst
+proc ChangePolePositionToMax
 	push bp
 	mov bp, sp
 	
-	START_SPACE equ [bp+4]
 	
-	mov ax, START_SPACE
-	mov [FirstPoleStartSpaceRow], ax
-	
-	mov ax, START_SPACE
-	add ax, SPACE_HEIGHT
-	
-	mov [FirstPoleEndSpaceRow], ax
-	
-	
-	
-	pop bp
-	ret 2
-endp ModifyStartAndEndSpaceVariablesFirst
-
-proc ModifyStartAndEndSpaceVariablesSecond
-	push bp
-	mov bp, sp
-	
-	START_SPACE equ [bp+4]
-	
-	
-	mov ax, START_SPACE
-	mov [SecondPoleStartSpaceRow], ax
-	
-	mov ax, START_SPACE
-	add ax, SPACE_HEIGHT
-	
-	mov [SecondPoleEndSpaceRow], ax
-	
-	
-	
-	
-	pop bp
-	ret 2
-endp ModifyStartAndEndSpaceVariablesSecond
-
-proc ModifyStartAndEndSpaceVariablesThird
-	push bp
-	mov bp, sp
-	
-	START_SPACE equ [bp+4]
-	
-	
-	mov ax, START_SPACE
-	mov [ThirdPoleStartSpaceRow], ax
-	
-	mov ax, START_SPACE
-	add ax, SPACE_HEIGHT
-	
-	mov [ThirdPoleEndSpaceRow], ax
-	
-	
-	
-	
-	
-	pop bp
-	ret 2
-endp ModifyStartAndEndSpaceVariablesThird
-
-
-
-proc ChangeFirstPolePositionToMax
-	push bp
-	mov bp, sp
-	
-	POLE_ADDRESS equ [bp+4]
+	POLE_ADDRESS equ [bp+10]
+	POLE_START_SPACE equ [bp+8]
+	POLE_END_SPACE equ [bp+6]
+	IS_BEFORE_POLE equ [bp+4]
 	
 	mov bx, POLE_ADDRESS
 	
 	mov ax, [bx]
 	cmp ax, POLE_BOUNDARY
-	jle ChangeFirstPoleToMax
-	jmp EndFirstPoleChangePosition
-	ChangeFirstPoleToMax: 
+	jle ChangePoleToMax
+	jmp EndPoleChangePosition
+	ChangePoleToMax: 
 	
-	
-		mov cx, [FirstPoleXPosition]
-		push [FirstPoleStartSpaceRow]
-		push [FirstPoleEndSpaceRow]
+		
+		mov cx, [bx]
+		mov bx, POLE_START_SPACE
+		push [bx]
+		mov bx, POLE_END_SPACE
+		push [bx]
 		
 		call EndPole
 		
 		mov ax, 320 ; screen width
 		sub ax, POLE_WIDTH
+		mov bx, POLE_ADDRESS
 		mov [bx], ax
 		
-		mov bl, 0
-		mov ax, 200
 		
-		sub ax, SPACE_HEIGHT
-		mov bh, al ; 200 - space-height
-		
-		dec bh
+		mov bl, MINIMUM_SPACE_HEIGHT
+		mov bh, MAXIMUM_SPACE_HEIGHT
 		
 		call RandomByCs
 		
+		push ax ; save random space
 		
-		push ax
-		call ModifyStartAndEndSpaceVariablesFirst
+		xor ah,ah
+		
+		mov bl, 0
+		mov cx, 200
+		
+		sub cx, ax ; 200 - space height
+		mov bh, cl 
+		
+		
+		
+		call RandomByCs
+		
+		pop cx ; random space height into cx
+		
+		push ax ; random space start position
+		push POLE_START_SPACE
+		push POLE_END_SPACE
+		push cx
+		call ModifyPoleParameters
 		
 		mov cx, [FirstPoleXPosition]
 		push [FirstPoleStartSpaceRow]
@@ -701,120 +650,64 @@ proc ChangeFirstPolePositionToMax
 		
 		call InitializePole
 		call HandlePoleInconsistency
+		
+		mov bx, IS_BEFORE_POLE
+		mov ax, TRUE
+		mov [bx], ax
 	
-	
-	EndFirstPoleChangePosition: 	
+	EndPoleChangePosition: 	
 	pop bp
-	ret 2
-endp ChangeFirstPolePositionToMax
+	ret 8
+endp ChangePolePositionToMax
 
-proc ChangeSecondPolePositionToMax
+proc ModifyPoleParameters
 	push bp
 	mov bp, sp
 	
-	POLE_ADDRESS equ [bp+4]
-	
-	mov bx, POLE_ADDRESS
-	
-	mov ax, [bx]
-	cmp ax, POLE_BOUNDARY
-	jle ChangeSecondPoleToMax
-	jmp EndSecondPoleChangePosition
-	ChangeSecondPoleToMax: 
-		mov cx, [SecondPoleXPosition]
-		push [SecondPoleStartSpaceRow]
-		push [SecondPoleEndSpaceRow]
-		call EndPole
-		
-		mov ax, 320 ; screen width
-		sub ax, POLE_WIDTH
-		mov [bx], ax
-		
-
-		mov bl, 0
-		mov ax, 200
-		sub ax, SPACE_HEIGHT
-		mov bh, al ; 200 - space-height
-		dec bh
-
-		call RandomByCs
-
-		push ax
-		call ModifyStartAndEndSpaceVariablesSecond
-	
-		mov cx, [SecondPoleXPosition]
-		push [SecondPoleStartSpaceRow]
-		push [SecondPoleEndSpaceRow]
-		
-		call InitializePole
-		call HandlePoleInconsistency
+	RANDOM_SPACE equ [bp+10]
+	START_SPACE equ [bp+8]
+	END_SPACE equ [bp+6]
+	RANDOM_HEIGHT equ [bp+4]
 	
 	
-	EndSecondPoleChangePosition: 	
+	mov ax, RANDOM_SPACE
+	mov bx, START_SPACE
+	mov [bx], ax
+	
+	mov ax, RANDOM_SPACE
+	add ax, RANDOM_HEIGHT
+	
+	mov bx, END_SPACE
+	mov [bx], ax
+	
+	
+	
+	
+	
 	pop bp
-	ret 2
-endp ChangeSecondPolePositionToMax
-
-
-proc ChangeThirdPolePositionToMax
-	push bp
-	mov bp, sp
-	
-	POLE_ADDRESS equ [bp+4]
-	
-	mov bx, POLE_ADDRESS
-	
-	mov ax, [bx]
-	cmp ax, POLE_BOUNDARY
-	jle ChangeThirdPoleToMax
-	jmp EndThirdPoleChangePosition
-	ChangeThirdPoleToMax: 
-		mov cx, [ThirdPoleXPosition]
-		push [ThirdPoleStartSpaceRow]
-		push [ThirdPoleEndSpaceRow]
-		call EndPole
-		
-		mov ax, 320 ; screen width
-		sub ax, POLE_WIDTH
-		mov [bx], ax
-		
-		
-		mov bl, 0
-		mov ax, 200
-		sub ax, SPACE_HEIGHT
-		mov bh, al ; 200 - space-height
-		dec bh
-
-		call RandomByCs
-
-		
-		push ax
-		call ModifyStartAndEndSpaceVariablesThird
-	
-	
-		mov cx, [ThirdPoleXPosition]
-		push [ThirdPoleStartSpaceRow]
-		push [ThirdPoleEndSpaceRow]
-		
-		call InitializePole
-		call HandlePoleInconsistency
-	
-	EndThirdPoleChangePosition: 	
-	pop bp
-	ret 2
-endp ChangeThirdPolePositionToMax
+	ret 8
+endp ModifyPoleParameters
 
 
 proc HandleIllegalPolePositions
 	push offset FirstPoleXPosition
-	call ChangeFirstPolePositionToMax
+	push offset FirstPoleStartSpaceRow
+	push offset FirstPoleEndSpaceRow
+	push offset IsBeforeFirstPole
+	call ChangePolePositionToMax
 	
 	push offset SecondPoleXPosition
-	call ChangeSecondPolePositionToMax
+	push offset SecondPoleStartSpaceRow
+	push offset SecondPoleEndSpaceRow
+	push offset IsBeforeSecondPole
+	call ChangePolePositionToMax
 	
 	push offset ThirdPoleXPosition
-	call ChangeThirdPolePositionToMax
-
+	push offset ThirdPoleStartSpaceRow
+	push offset ThirdPoleEndSpaceRow
+	push offset IsBeforeThirdPole
+	call ChangePolePositionToMax
+	
 	ret	
 endp HandleIllegalPolePositions
 
@@ -1376,7 +1269,7 @@ endp CopyBmpPalette
 ; input dx filename to open
 proc OpenFile						 
 	mov ah, 3Dh
-	xor al, al
+	mov al, 2
 	int 21h
 	jc @@ErrorAtOpen
 	mov [FileHandle], ax
@@ -1466,7 +1359,16 @@ proc  SetGraphic
 	ret
 endp 	SetGraphic
 
-
+;================================================
+; Description - Write on screen the value of ax (decimal)
+;               the practice :  
+;				Divide AX by 10 and put the Mod on stack 
+;               Repeat Until AX smaller than 10 then print AX (MSB) 
+;           	then pop from the stack all what we kept there and show it. 
+; INPUT: AX
+; OUTPUT: Screen 
+; Register Usage: AX  
+;================================================
 proc ShowAxDecimal
        push ax
 	   push bx
