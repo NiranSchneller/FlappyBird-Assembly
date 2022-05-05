@@ -11,13 +11,13 @@ HELP_SCREEN equ 'Help.bmp'
 BIRD equ 'Bird.bmp'
 BIRD_UP equ 'BirdUp.bmp'
 ERASE_SCREEN equ 'Erase.bmp'
-
+SCORE_TABLE equ 'Scores.txt'
 BMP_WIDTH = 320
 
 PLAYER_SIZE = 15
 PLAYER_AUTO_PIXEL_MOVEMENT = 4
 PLAYER_MANUAL_PIXEL_MOVEMENT = 30
-PLAYER_COLUMN = 20
+PLAYER_COLUMN = 30
 TRUE = 1
 FALSE = 0
 SPACE_HEIGHT = 70
@@ -26,9 +26,6 @@ POLE_BOUNDARY = 0
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
 POLE_PIXEL_MOVEMENT = 2
-
-POLE_RECTANGLE_COLOR = 15
-
 
 BACKGROUND_COLOR = 9
 
@@ -40,6 +37,7 @@ DATASEG
 	BirdName db BIRD, 0
 	BirdUpName db BIRD_UP, 0
 	EraseScreenName db ERASE_SCREEN, 0
+	ScoresName db SCORE_TABLE, 0 
 	FileHandle	dw ?
 	Header 	    db 54 dup(0)
 	Palette 	db 400h dup (0)
@@ -73,6 +71,8 @@ DATASEG
 	CurrentScore db 0
 
 	RndCurrentPos dw start
+
+	IsInPipeZone db FALSE
 
 	
 	
@@ -268,40 +268,111 @@ proc Game
 			mov cx, POLE_WAIT_INTERVAL
 		HandlePolesForbidden: 
 		
-		;call HandleScore	
+		call HandleScore	
 		
 	jmp MainLoop
 	
 	EndGame: 
 		pop cx
-		;call PrintScore
+		call HandleScoreTable
 		jmp DeathScreen
 	ret
 endp Game
 
+proc HandleScoreTable
+	
+	mov dx, offset ScoresName
+	call OpenFile
+	
+	;call InputScoreIntoScoreTable
+	
+	mov ah, 40h
+	mov bx, [FileHandle]
+	mov cx, 2
+	mov dx, offset CurrentScore
+	add dx, '0'
+	int 21h
 
+	
+	
+	mov dx, offset ScoresName
+	call CloseFile
+	
 
-proc PrintScore
-	
-	mov al, [CurrentScore]
-	xor ah,ah
-	
-	call ShowAxDecimal
-	
 	ret
-endp PrintScore
+endp HandleScoreTable
+
+proc InputScoreIntoScoreTable
+	
+	mov ah, 40h
+	mov bx, [FileHandle]
+	mov cx, 2
+	mov dx, offset CurrentScore
+	add dx, '0'
+	int 21h
+
+	ret
+endp InputScoreIntoScoreTable
+
+proc HandleIsInPipeZone
+	push bp
+	mov bp, sp
+	
+	POLE_ADDRESS equ [bp+4]
+	
+	cmp [IsInPipeZone], TRUE
+	je HandleScoreIncrementation
+	
+	
+	mov bx, POLE_ADDRESS
+	mov ax, [bx]
+	mov bx, [PLAYER_COLUMN]
+		
+	cmp bx, ax ; PLAYER_COLUMN > POLE_ADDRESS
+	ja ToggleTrigger
+	jmp EndHandlingScoreVariable
+
+	ToggleTrigger: 
+		mov [IsInPipeZone], TRUE
+		
+	HandleScoreIncrementation: 
+	
+		
+		mov bx, POLE_ADDRESS
+		mov ax, [bx]
+		add ax, POLE_WIDTH
+		
+		mov bx, PLAYER_COLUMN
+		cmp bx, ax
+		ja IncrementScore
+		jmp EndHandlingScoreVariable
+			IncrementScore:
+				
+				inc [CurrentScore]
+				mov [IsInPipeZone], FALSE
+	
+	EndHandlingScoreVariable: 
+	
+	pop bp	
+	ret 2
+endp HandleIsInPipeZone
+
 
 proc HandleScore
-	mov ax, PLAYER_COLUMN
-	cmp ax, [FirstPoleXPosition]
-	ja IncrementScore
-	jmp EndHandleScore
+
+	push offset FirstPoleXPosition
+	call HandleIsInPipeZone
 	
-	IncrementScore:
-		inc [CurrentScore]
 	
-	EndHandleScore: 
-		
+	push offset SecondPoleXPosition
+	call HandleIsInPipeZone
+	
+	
+	push offset ThirdPoleXPosition
+	call HandleIsInPipeZone
+	
+	
+	
 	ret
 endp HandleScore
 
@@ -311,81 +382,6 @@ proc DeathScreen
 	
 	ret	
 endp DeathScreen
-
-
-proc DrawPoleRectangle
-	push bp 
-	mov bp, sp
-	
-	Pole_Position equ [bp+4]
-	mov ax, Pole_Position
-	
-	mov dx, POLE_WIDTH
-	shr dx, 1
-	
-	sub ax, dx ; ax = Pole_Position + pole width/2
-	
-	mov cx, ax ; starting col
-	
-	; pos on x axis: ax
-	
-	mov si, 70
-	
-	mov ax, POLE_WIDTH
-	shr ax, 3
-	
-	mov di, dx
-	
-
-	mov dx, 10 ; starting row
-	
-	mov al, POLE_RECTANGLE_COLOR
-	
-	
-	call Rect
-	
-	
-
-	
-	
-	pop bp
-	ret 2
-endp DrawPoleRectangle 
-
-proc ErasePoleRectangle
-	push bp 
-	mov bp, sp
-	
-	Pole_Position equ [bp+4]
-	Pole_Space_height equ [bp+6]
-	mov ax, Pole_Position
-	
-	mov dx, POLE_WIDTH
-	shr dx, 1
-	
-	add ax, dx ; ax = Pole_Position + pole width/2
-	
-	mov cx, ax ; starting col
-	
-	; pos on x axis: ax
-	
-	mov si, 70
-	
-	mov ax, POLE_WIDTH
-	shr ax, 3
-	
-	mov di, dx
-	
-
-	mov dx, 10 ; starting row
-	
-	mov al, BACKGROUND_COLOR
-	
-	
-	call Rect
-
-	ret
-endp ErasePoleRectangle 
 
 proc ScanPlayerPerimeterForGivenColor 
 	push bp
@@ -828,8 +824,6 @@ proc HandlePoles
 	
 	
 	
-	
-	call HandleIllegalPolePositions
 
 
 	sub [FirstPoleXPosition], POLE_PIXEL_MOVEMENT
@@ -851,8 +845,10 @@ proc HandlePoles
 	push [ThirdPoleEndSpaceRow]
 	call DrawPole
 
-
 	call ErasePoles
+	
+	call HandleIllegalPolePositions
+
 
 	ret
 endp HandlePoles
@@ -967,7 +963,7 @@ endp DrawPlayer
 
 proc ErasePlayer
 	
-	mov cx, 20
+	mov cx, PLAYER_COLUMN
 	mov dl, [PlayerYPosition]
 	mov al, BACKGROUND_COLOR
 	mov si, PLAYER_SIZE
@@ -979,7 +975,7 @@ endp ErasePlayer
 
 
 proc InitializePlayer
-	mov [BmpLeft],20
+	mov [BmpLeft],PLAYER_COLUMN
 	mov [BmpTop],100
 	mov [BmpColSize],PLAYER_SIZE
 	mov [BmpRowSize],PLAYER_SIZE
@@ -1288,7 +1284,7 @@ endp Rect
 proc OpenShowBmp
 	
 	 
-	call OpenBmpFile
+	call OpenFile
 	cmp [ErrorFile],1
 	je @@ExitProc
 	
@@ -1301,7 +1297,7 @@ proc OpenShowBmp
 	call  ShowBmp
 	
 	 
-	call CloseBmpFile
+	call CloseFile
 
 @@ExitProc:
 	ret
@@ -1378,7 +1374,7 @@ endp CopyBmpPalette
 
 	
 ; input dx filename to open
-proc OpenBmpFile						 
+proc OpenFile						 
 	mov ah, 3Dh
 	xor al, al
 	int 21h
@@ -1390,7 +1386,7 @@ proc OpenBmpFile
 	mov [ErrorFile],1
 @@ExitProc:	
 	ret
-endp OpenBmpFile
+endp OpenFile
 
 proc ShowBMP 
 ; BMP graphics are saved upside-down.
@@ -1455,12 +1451,12 @@ proc ShowBMP
 endp ShowBMP 
 
 
-proc CloseBmpFile
+proc CloseFile
 	mov ah,3Eh
 	mov bx, [FileHandle]
 	int 21h
 	ret
-endp CloseBmpFile
+endp CloseFile
 
 
 proc  SetGraphic
