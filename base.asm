@@ -292,7 +292,7 @@ proc HandleScoreTable
 	;
 	;;call InputScoreIntoScoreTable
 	;
-	
+	xor ah,ah
 	mov al, [CurrentScore]
 	call ShowAxDecimal
 	
@@ -624,7 +624,7 @@ proc ChangePolePositionToMax
 
 		
 		mov ax, 320 ; screen width
-		sub ax, POLE_WIDTH
+		sub ax, POLE_PIXEL_MOVEMENT
 		mov bx, POLE_ADDRESS
 		mov [bx], ax
 		
@@ -656,11 +656,6 @@ proc ChangePolePositionToMax
 		push cx
 		call ModifyPoleParameters
 		
-		mov cx, [FirstPoleXPosition]
-		push [FirstPoleStartSpaceRow]
-		push [FirstPoleEndSpaceRow]
-		
-		call InitializePole
 		
 		mov bx, IS_BEFORE_POLE
 		mov ax, TRUE
