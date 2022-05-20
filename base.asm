@@ -5,7 +5,13 @@ MODEL small
 
 STACK 100h
 
+MACRO PUSH_REGISTERS
+	push ax bx cx dx di si 
+ENDM 
 
+MACRO POP_REGISTERS
+	pop si di dx cx bx ax
+ENDM
 
 START_SCREEN equ 'Start.bmp'
 MAIN_SCREEN equ 'Main.bmp'
@@ -16,9 +22,11 @@ ERASE_SCREEN equ 'Erase.bmp'
 SCORE_TABLE equ 'Scores.txt'
 BMP_WIDTH = 320
 GAME_OVER equ 'GO.bmp'
+
 PLAYER_SIZE = 15
-PLAYER_AUTO_PIXEL_MOVEMENT = 4
+PLAYER_AUTO_PIXEL_MOVEMENT = 2
 PLAYER_MANUAL_PIXEL_MOVEMENT = 30
+STARTING_PLAYER_Y_POSITION = 20
 PLAYER_COLUMN = 30
 TRUE = 1
 FALSE = 0
@@ -27,9 +35,23 @@ POLE_BOUNDARY = 0
 POLE_COLOR = 2 ; Goes by graphic mode colors
 POLE_WIDTH = 20
 POLE_PIXEL_MOVEMENT = 2
-MINIMUM_SPACE_HEIGHT = 50
+FIRST_POLE_STARTING_POSITION = 	100
+FIRST_POLE_SPACE_STARTING_POSITION = 10
+SECOND_POLE_STARTING_POSITION = 200
+SECOND_POLE_SPACE_STARTING_POSITION = 10
+THIRD_POLE_STARTING_POSITION = 	300
+THIRD_POLE_SPACE_STARTING_POSITION = 10
+MINIMUM_SPACE_HEIGHT = 70
 MAXIMUM_SPACE_HEIGHT = 90
 BACKGROUND_COLOR = 9
+GAME_OVER_RECTANGLE_COLOR = 0
+GAME_OVER_COLUMN = 60
+GAME_OVER_ROW = 60
+GAME_OVER_WIDTH = 192
+GAME_OVER_HEIGHT = 32
+GAME_OVER_RECTANGLE_CONSTANT = 10 ; works on x axis and y axis
+GAME_OVER_RECTANGLE_HEIGHT_CONSTANT = 50 
+
 
 DATASEG
 	
@@ -57,30 +79,30 @@ DATASEG
 	
 	ScrLine db BMP_WIDTH dup (0)  ; One Color line read buffer
 	
-	PlayerYPosition db 100 ; Starting player position (half of screen )
+	PlayerYPosition db STARTING_PLAYER_Y_POSITION ; Starting player position
 	
-	FirstPoleXPosition dw 100
-	FirstPoleStartSpaceRow dw 10 ; start of space
-	FirstPoleEndSpaceRow dw 10 + MAXIMUM_SPACE_HEIGHT ; end of space
+	FirstPoleXPosition dw FIRST_POLE_STARTING_POSITION
+	FirstPoleStartSpaceRow dw FIRST_POLE_SPACE_STARTING_POSITION ; start of space
+	FirstPoleEndSpaceRow dw FIRST_POLE_SPACE_STARTING_POSITION + MAXIMUM_SPACE_HEIGHT ; end of space
 	
-	SecondPoleXPosition dw 200
-	SecondPoleStartSpaceRow dw 10 ; start of space
-	SecondPoleEndSpaceRow dw 10 + MAXIMUM_SPACE_HEIGHT ; end of space
+	SecondPoleXPosition dw SECOND_POLE_STARTING_POSITION
+	SecondPoleStartSpaceRow dw SECOND_POLE_SPACE_STARTING_POSITION ; start of space
+	SecondPoleEndSpaceRow dw SECOND_POLE_SPACE_STARTING_POSITION + MAXIMUM_SPACE_HEIGHT ; end of space
 	
-	ThirdPoleXPosition dw 300
-	ThirdPoleStartSpaceRow dw 10 ; start of space
-	ThirdPoleEndSpaceRow dw 10 + MAXIMUM_SPACE_HEIGHT ; end of space
+	ThirdPoleXPosition dw THIRD_POLE_STARTING_POSITION
+	ThirdPoleStartSpaceRow dw THIRD_POLE_SPACE_STARTING_POSITION ; start of space
+	ThirdPoleEndSpaceRow dw THIRD_POLE_SPACE_STARTING_POSITION + MAXIMUM_SPACE_HEIGHT ; end of space
 	
 	CurrentScore db 0
-	Temp db 0
 	
 	RndCurrentPos dw start
 
-	IsBeforeFirstPole db TRUE
-	IsBeforeSecondPole db TRUE ; changes when pole respawns
-	IsBeforeThirdPole db TRUE
+	IsInFirstPoleZone db FALSE
+	IsInSecondPoleZone db FALSE 
+	IsInThirdPoleZone db FALSE
 
-	
+	ScoreMessage db " Final Score Is: ", '$'
+	FinalMessage db  0dh, 0ah, " Press any key to continue...$"
 	
 
 CODESEG
@@ -89,25 +111,72 @@ start:
 	mov ax,@data			 
 	mov ds,ax	
 	
+	
+	call MainScreen
+	
+	
+exit:	
+	mov ax,4C00h
+    int 21h
+	
+	
+	
+
+proc InitializeValues
+
+	mov [FirstPoleXPosition], FIRST_POLE_STARTING_POSITION
+	
+	mov [FirstPoleStartSpaceRow], FIRST_POLE_SPACE_STARTING_POSITION
+	mov [FirstPoleEndSpaceRow], FIRST_POLE_SPACE_STARTING_POSITION
+	add [FirstPoleEndSpaceRow], MAXIMUM_SPACE_HEIGHT
+	
+	mov [SecondPoleXPosition], SECOND_POLE_STARTING_POSITION
+	mov [SecondPoleStartSpaceRow], SECOND_POLE_SPACE_STARTING_POSITION
+	mov [SecondPoleEndSpaceRow], SECOND_POLE_SPACE_STARTING_POSITION
+	add [SecondPoleEndSpaceRow], MAXIMUM_SPACE_HEIGHT
+	
+	mov [ThirdPoleXPosition], THIRD_POLE_STARTING_POSITION
+	
+	mov [ThirdPoleStartSpaceRow], THIRD_POLE_SPACE_STARTING_POSITION
+	mov [ThirdPoleEndSpaceRow], THIRD_POLE_SPACE_STARTING_POSITION
+	add [ThirdPoleEndSpaceRow], MAXIMUM_SPACE_HEIGHT
+	
+	mov [PlayerYPosition], STARTING_PLAYER_Y_POSITION
+	mov [CurrentScore], 0
+	
+	mov [IsInFirstPoleZone], FALSE
+	mov [IsInSecondPoleZone], FALSE
+	mov [IsInThirdPoleZone], FALSE
+
+	ret
+endp InitializeValues
+	
+
+;==============================
+; Description: 
+;	this procedure initializes mainScreen, and waits for mouse input. When mouse is clicked,
+;	it checks whether or not to switch screens.
+;==============================
+
+proc MainScreen
 	call SetGraphic
+	call InitializeValues
+	
+	
+	mov ax, 1
+	int 33h
+	
+	mov ah, 2
+	mov bh, 2
+	mov dl, 0
+	mov dh, 0
+	int 10h
 	
 	
 	mov [BmpLeft],0
 	mov [BmpTop],0
 	mov [BmpColSize], 320
 	mov [BmpRowSize] ,200
-	
-	ShowMain: 
-		mov ax, 1
-		int 33h
-		call MainScreen
-	
-exit:	
-	mov ax,4C00h
-    int 21h
-	
-;==============================
-proc MainScreen
 	
 	mov dx, offset MainName
 	call OpenShowBmp
@@ -161,8 +230,11 @@ proc MainScreen
 endp MainScreen
 
 
-
-
+;==============================
+; Description: 
+;	this procedure initializes helpScreen, and waits for mouse input. When mouse is clicked,
+;	it checks whether or not to switch screens.
+;==============================
 proc HelpScreen
 
 	mov dx, offset HelpName
@@ -218,19 +290,43 @@ proc HelpScreen
 	ret
 endp HelpScreen
 
+;==============================
+; Description: 
+;	This procedure draws the screen. Goes by background color.
+;==============================
 proc DrawScreen
-	mov cx, 0
-	mov dx, 0	
-	mov di, 320
-	mov si, 200
-	mov al, BACKGROUND_COLOR
-	call Rect
-
+	mov [BmpLeft],0
+	mov [BmpTop],0
+	mov [BmpColSize], 320
+	mov [BmpRowSize] ,200
+	
+	mov dx, offset EraseScreenName
+	
+	call OpenShowBmp
 	
 	ret
 endp DrawScreen
 
 
+;==============================
+; Description: 
+;	Manages the whole game. 
+; 	Steps: 
+; 	Before mainLoop:
+;		Draw the screen
+;		InitializePlayer
+;		InitializePoles
+;	MainLoop:
+;		HandleScore
+;		HandlePlayerMovement
+;		HandleIllegalPlayerPosition
+;		HandlePlayerCollision
+;		HandlePoles
+;	This loop runs until HandleIllegalPlayerPosition or HandlePlayerCollision returns true. In This case, the loop exits
+;	After MainLoop:
+;		Goto DeathScreen
+;	
+;==============================
 proc Game
 	; initialize: 
 	
@@ -242,7 +338,6 @@ proc Game
 	call InitializePlayer
 	
 	call InitializePoles
-	;call ErasePoles
 	mov ah, 00h ; clear buffer
 	int 16h
 	
@@ -251,10 +346,12 @@ proc Game
 	MainLoop: 
 		push cx
 
+		call HandleScore	
+
 		call HandlePlayerMovement ; handles player movement
 		
 		xor dx,dx ; RESET DX
-		
+		; call HandleTimer
 		call HandleIllegalPlayerPosition ; position > 200 or position < 0
 		
 		cmp dx, TRUE
@@ -274,122 +371,195 @@ proc Game
 			mov cx, POLE_WAIT_INTERVAL
 		HandlePolesForbidden: 
 		
-		call HandleScore	
 		
 	jmp MainLoop
 	
 	EndGame: 
 		pop cx
-		call HandleScoreTable
 		jmp DeathScreen
 	ret
 endp Game
 
-proc HandleScoreTable
-	
-	;mov dx, offset ScoresName
-	;call OpenFile
-	;
-	;;call InputScoreIntoScoreTable
-	;
-	xor ah,ah
-	mov al, [CurrentScore]
-	call ShowAxDecimal
-	
-	;
-	;
-	;mov dx, offset ScoresName
-	;call CloseFile
-	
-
-	ret
-endp HandleScoreTable
-
-proc InputScoreIntoScoreTable
-	
-	
-
-	
-	
-	ret
-endp InputScoreIntoScoreTable
-
-
-
-proc HandleIsBeforePole
+;==============================
+; Description: 
+;	This procedure checks whether or not a given pole is in the pole zone.
+;	 if it is, the variable is made true.
+;==============================
+proc IsInPoleZone
 	push bp
 	mov bp, sp
 	
 	POLE_ADDRESS equ [bp+6]
-	IS_BEFORE_POLE equ [bp+4]
+	IS_IN_POLE_ZONE equ [bp+4]
 	
-	mov bx, IS_BEFORE_POLE
+	mov bx, POLE_ADDRESS
+	mov ax, [bx] ; pole position in ax
 	
-	mov ax, TRUE
-	cmp [bx], ax
-	jne EndHandlingScoreVariable
+	cmp ax, PLAYER_COLUMN
+	jl InPoleZone
+	jmp NotInPoleZone
 	
-	HandleScoreIncrementation: 
-	
-		
-		mov bx, POLE_ADDRESS
-		mov ax, [bx]
-		add ax, POLE_WIDTH
-		
-		mov bx, PLAYER_COLUMN
-		cmp bx, ax
-		ja IncrementScore
-		jmp EndHandlingScoreVariable
-			IncrementScore:
-				
-				inc [CurrentScore]
-				mov bx, IS_BEFORE_POLE
-				mov ax, FALSE
-				mov [bx], ax
-	EndHandlingScoreVariable: 
+	InPoleZone: 
+		mov bx, IS_IN_POLE_ZONE
+		mov ax, TRUE
+		mov [bx], ax
+
+	NotInPoleZone: 
 	
 	pop bp	
 	ret 4
-endp HandleIsBeforePole
+endp IsInPoleZone
 
+;==============================
+; Description: 
+;	This procedure uses isInPoleZone to decide whether or not to increment the score by 1.
+;==============================
+proc HandleScoreIncrementation
+	push bp
+	mov bp, sp
+	
+	POLE_ADDRESS equ [bp+6]
+	IS_IN_POLE_ZONE equ [bp+4]
+	
+	mov bx, IS_IN_POLE_ZONE
+	mov ax, [bx]
+	cmp ax, TRUE
+	jne EndScoreIncrementation
+	
+	FinalCheck: 	
+		mov bx, POLE_ADDRESS ; bx = pole address
+		mov ax, [bx]
+		add ax, POLE_WIDTH ; ax = polePosition + width = end of the pole
+		
+		mov bx, PLAYER_COLUMN ; where the player is positioned on the x axis
+		
+		cmp bx, ax ; if where the player is positioned > end of pole -> IncrementScore
+		ja IncrementScore
+		jmp EndScoreIncrementation
+		
+		IncrementScore: 	
+			inc [CurrentScore]
+			mov bx, IS_IN_POLE_ZONE
+			mov ax, FALSE ; Move false after player has passed the pole zone.
+			mov [bx], ax
+		
+	EndScoreIncrementation:
+	pop bp	
+	ret 4
+endp HandleScoreIncrementation
 
 proc HandleScore
-
+	
+	PUSH_REGISTERS
+	
 	push offset FirstPoleXPosition
-	push offset IsBeforeFirstPole
-	call HandleIsBeforePole
+	push offset IsInFirstPoleZone
+	call IsInPoleZone
 	
 	
 	push offset SecondPoleXPosition
-	push offset IsBeforeSecondPole
-	call HandleIsBeforePole
+	push offset IsInSecondPoleZone
+	call IsInPoleZone
 	
 	
 	push offset ThirdPoleXPosition
-	push offset IsBeforeThirdPole
-	call HandleIsBeforePole
+	push offset IsInThirdPoleZone
+	call IsInPoleZone
+	
+	; handle score inc
+	
+	push offset FirstPoleXPosition
+	push offset IsInFirstPoleZone
+	call HandleScoreIncrementation
 	
 	
+	push offset SecondPoleXPosition
+	push offset IsInSecondPoleZone
+	call HandleScoreIncrementation
+	
+	
+	push offset ThirdPoleXPosition
+	push offset IsInThirdPoleZone
+	call HandleScoreIncrementation
+	
+	
+	POP_REGISTERS
 	
 	ret
 endp HandleScore
 
+proc DrawEndGameRectangle
+	
+	mov cx, GAME_OVER_COLUMN
+	sub cx, GAME_OVER_RECTANGLE_CONSTANT
+	
+	mov dx, GAME_OVER_ROW
+	sub dx, GAME_OVER_RECTANGLE_CONSTANT
+	
+	mov al, GAME_OVER_RECTANGLE_COLOR
+	
+	xor di,di
+	add di, GAME_OVER_RECTANGLE_CONSTANT
+	add di, GAME_OVER_WIDTH
+	add di, GAME_OVER_RECTANGLE_CONSTANT
+	
+	xor si, si 
+	add si, GAME_OVER_RECTANGLE_CONSTANT
+	add si, GAME_OVER_HEIGHT
+	add si, GAME_OVER_RECTANGLE_HEIGHT_CONSTANT
+	
+	call Rect
+	
+	ret
+endp DrawEndGameRectangle
+
 proc DeathScreen
 	
-	;call DrawScreen
 	
-	mov [BmpLeft], 53
-	mov [BmpTop], 53
+	call DeathScreenDelay
+	call TextMode
+	call PrintScore
+	call PrintFinalMessage
 	
-	mov [BmpColSize], 192
-	mov [BmpRowSize], 32
+	mov ah, 0h
+	int 16h
 	
-	mov dx, offset GameOverName
-	call OpenShowBmp
-	
+	call MainScreen
 	ret	
 endp DeathScreen
 
+proc PrintScore
+	
+	mov ah, 09h
+	mov dx, offset ScoreMessage
+	int 21h
+	
+	xor ah,ah
+	mov al, [CurrentScore]
+	shr al, 2 ; div by 4
+	call ShowAxDecimal
+	
+	ret
+endp PrintScore
+
+proc PrintFinalMessage
+	mov ah, 09h
+	mov dx, offset FinalMessage
+	int 21h
+	ret
+endp PrintFinalMessage
+
+proc DeathScreenDelay
+	mov ah, 86h
+	mov cx, 01Eh
+	mov dx, 8480h
+	int 15h
+	ret
+endp DeathScreenDelay
+;==============================
+; Description: 
+;	Goes over a square perimeter around the player and checks whether a given pixel color is detected.
+;==============================
 proc ScanPlayerPerimeterForGivenColor 
 	push bp
 	mov bp, sp
@@ -401,7 +571,7 @@ proc ScanPlayerPerimeterForGivenColor
 	
 	mov dl, [PlayerYPosition]
 	
-	
+	; start at x position PLAYER_COLUMN + PLAYER_SIZE. every iteration, increment counter by one to scan next player pixel.
 	mov cx, PLAYER_SIZE
 	@@LoopCollisionYAxis: 
 	push cx
@@ -425,6 +595,10 @@ proc ScanPlayerPerimeterForGivenColor
 	mov cx, PLAYER_SIZE
 	dec cx
 	mov si, 0
+	
+	; Start at x position player column, and y position = player y position.
+	; Every iteration increase si by 1 and add to cx,  move into dl player y position. 
+	; This gives us the current place on the axis which we want to check for given color. if detected, jump out
 	LoopCollisionTopXAxis:
 		push cx
 		
@@ -442,7 +616,7 @@ proc ScanPlayerPerimeterForGivenColor
 		je SetDXRegister
 		
 		
-		sub cx, si
+		sub cx, si ; if this didnt happen, cx instead of adding one more every iteration, would add si.
 		inc si
 		pop cx
 	loop LoopCollisionTopXAxis
@@ -450,6 +624,10 @@ proc ScanPlayerPerimeterForGivenColor
 	mov cx, PLAYER_SIZE
 	dec cx
 	mov si, 0
+	
+	; Start at x position player column, and y position = player y position.
+	; Every iteration increase si by 1 and add to cx,  move into dl the player size + position. 
+	; This gives us the current place on the axis which we want to check for given color. if detected, jump out
 	LoopCollisionBottomXAxis:
 		push cx
 		
@@ -468,7 +646,7 @@ proc ScanPlayerPerimeterForGivenColor
 		je SetDXRegister
 		
 		
-		sub cx, si
+		sub cx, si ; if this didnt happen, cx instead of adding one more every iteration, would add si.
 		inc si
 		pop cx
 	loop LoopCollisionBottomXAxis
@@ -483,15 +661,24 @@ proc ScanPlayerPerimeterForGivenColor
 	ret 2 
 endp ScanPlayerPerimeterForGivenColor
 
+
+;==============================
+; Description: 
+;	Pushes the pole color and uses ScanPlayerPerimeterForGivenColor.
+;==============================
 proc HandlePlayerCollision
 	push POLE_COLOR
 	
 	call ScanPlayerPerimeterForGivenColor
 	
-	
 	ret
 endp HandlePlayerCollision
 
+
+;==============================
+; Description: 
+;	Initializes ALL player poles, by pushing the start and ending of the pole spaces, and moving the position into cx. this procedure uses InitializePole
+;==============================
 proc InitializePoles
 	
 	mov cx, [FirstPoleXPosition]
@@ -593,15 +780,20 @@ RandLoop: ;  generate random number
 	ret
 endp RandomByCs
 
+;==============================
+; Description: 
+;	The procedure starts with getting the pole position, the pole start space and end space from the stack. 
+; 	It checks if the pole has gone past its boundary, if it has, change the position to the max. 
+;   when changing position, this procedure randomizes pole space start position, and space height
+;==============================
 proc ChangePolePositionToMax
 	push bp
 	mov bp, sp
 	
 	
-	POLE_ADDRESS equ [bp+10]
-	POLE_START_SPACE equ [bp+8]
-	POLE_END_SPACE equ [bp+6]
-	IS_BEFORE_POLE equ [bp+4]
+	POLE_ADDRESS equ [bp+8]
+	POLE_START_SPACE equ [bp+6]
+	POLE_END_SPACE equ [bp+4]
 	
 	mov bx, POLE_ADDRESS
 	
@@ -612,76 +804,74 @@ proc ChangePolePositionToMax
 	ChangePoleToMax: 
 	
 		
-		mov cx, [bx]
+		mov cx, [bx] ; cx = pole position
 		mov bx, POLE_START_SPACE
-		push [bx]
+		push [bx] ; push start of pole space
 		mov bx, POLE_END_SPACE
-		push [bx]
+		push [bx] ; push end of pole space
 		
-		call EndPole
+		call EndPole ; completely erase the pole
 		
-		call HandlePoleInconsistency
+		call HandlePoleInconsistency ; handles leftover green pixels.
 
 		
 		mov ax, 320 ; screen width
 		sub ax, POLE_PIXEL_MOVEMENT
 		mov bx, POLE_ADDRESS
 		mov [bx], ax
-		
+		; pole position = (320 - POLE_PIXEL_MOVEMENT)
 		
 		mov bl, MINIMUM_SPACE_HEIGHT
 		mov bh, MAXIMUM_SPACE_HEIGHT
 		
-		call RandomByCs
+		call RandomByCs ; randomize pole space height
+		; AL = random number between al and ah
 		
 		push ax ; save random space
 		
-		xor ah,ah
+		xor ah,ah ; AH = 0
 		
-		mov bl, 0
-		mov cx, 200
+		mov bl, 0 ; minimum start position
+		mov cx, 200 ; graphic height
 		
-		sub cx, ax ; 200 - space height
-		mov bh, cl 
+		sub cx, ax ; subtract the graphic height by the space height so if for example the height = 40, the maximum start position needs to be 200 - 40, so there wont be too many pixels drawn.
+		mov bh, cl ; move the upper limit of the start position into bh
 		
 		
 		
-		call RandomByCs
+		call RandomByCs ; randomize the starting position between (0 and GRAPHIC_HEIGHT - SPACE_HEIGHT )
 		
 		pop cx ; random space height into cx
 		
 		push ax ; random space start position
-		push POLE_START_SPACE
-		push POLE_END_SPACE
-		push cx
+		push POLE_START_SPACE ; the address of the pole start space
+		push POLE_END_SPACE ; the address of the pole end space
+		push cx ; the random space height
 		call ModifyPoleParameters
 		
 		
-		mov bx, IS_BEFORE_POLE
-		mov ax, TRUE
-		mov [bx], ax
 	
 	EndPoleChangePosition: 	
 	pop bp
-	ret 8
+	ret 6
 endp ChangePolePositionToMax
 
 proc ModifyPoleParameters
 	push bp
 	mov bp, sp
 	
-	RANDOM_SPACE equ [bp+10]
+	RANDOM_SPACE_POSITION equ [bp+10]
 	START_SPACE equ [bp+8]
 	END_SPACE equ [bp+6]
 	RANDOM_HEIGHT equ [bp+4]
 	
 	
-	mov ax, RANDOM_SPACE
+	mov ax, RANDOM_SPACE_POSITION
 	mov bx, START_SPACE
-	mov [bx], ax
+	mov [bx], ax ; START_SPACE = RANDOM_SPACE_POSITION
 	
-	mov ax, RANDOM_SPACE
-	add ax, RANDOM_HEIGHT
+	mov ax, RANDOM_SPACE_POSITION
+	add ax, RANDOM_HEIGHT ; AX = RANDOM_SPACE_POSITION + RANDOM_HEIGHT = The end of the sspace
 	
 	mov bx, END_SPACE
 	mov [bx], ax
@@ -695,25 +885,26 @@ proc ModifyPoleParameters
 endp ModifyPoleParameters
 
 
+;==============================
+; Description: 
+;	Handles if position < POLE_BOUNDARY. uses ChangePolePositionToMax
+;==============================
 proc HandleIllegalPolePositions
 
 	
 	push offset FirstPoleXPosition
 	push offset FirstPoleStartSpaceRow
 	push offset FirstPoleEndSpaceRow
-	push offset IsBeforeFirstPole
 	call ChangePolePositionToMax
 	
 	push offset SecondPoleXPosition
 	push offset SecondPoleStartSpaceRow
 	push offset SecondPoleEndSpaceRow
-	push offset IsBeforeSecondPole
 	call ChangePolePositionToMax
 	
 	push offset ThirdPoleXPosition
 	push offset ThirdPoleStartSpaceRow
 	push offset ThirdPoleEndSpaceRow
-	push offset IsBeforeThirdPole
 	call ChangePolePositionToMax
 	
 	
@@ -723,17 +914,24 @@ proc HandleIllegalPolePositions
 endp HandleIllegalPolePositions
 
 
+;==============================
+; Description: 
+;	Handles everything related to poles. 
+; 	
+;==============================
 proc HandlePoles
 	xor cx,cx
 	
 	
 	
+	call ErasePoles 
 
 
 	sub [FirstPoleXPosition], POLE_PIXEL_MOVEMENT
-	sub [SecondPoleXPosition], POLE_PIXEL_MOVEMENT
+	sub [SecondPoleXPosition], POLE_PIXEL_MOVEMENT ; pole positions = polePositions - POLE_PIXEL_MOVEMENT
 	sub [ThirdPoleXPosition], POLE_PIXEL_MOVEMENT
 	
+	; Draw Each pole
 	mov cx, [FirstPoleXPosition]
 	push [FirstPoleStartSpaceRow]
 	push [FirstPoleEndSpaceRow]
@@ -749,8 +947,6 @@ proc HandlePoles
 	push [ThirdPoleEndSpaceRow]
 	call DrawPole
 
-	call ErasePoles
-	
 	call HandleIllegalPolePositions
 
 
@@ -776,6 +972,10 @@ proc ErasePoles
 	ret
 endp ErasePoles
 
+;==============================
+; Description: 
+;	Handles if position < 0 or position > 200. answer in dx
+;==============================
 proc HandleIllegalPlayerPosition
 	xor ax,ax
 	jmp CheckForForbiddenPositon
@@ -801,6 +1001,10 @@ proc HandleIllegalPlayerPosition
 	ret
 endp HandleIllegalPlayerPosition
 
+;==============================
+; Description: 
+;	Handles if space pressed. 
+;==============================
 proc HandlePlayerMovement
 
 	
@@ -886,7 +1090,7 @@ endp ErasePlayer
 
 proc InitializePlayer
 	mov [BmpLeft],PLAYER_COLUMN
-	mov [BmpTop],100
+	mov [BmpTop],STARTING_PLAYER_Y_POSITION
 	mov [BmpColSize],PLAYER_SIZE
 	mov [BmpRowSize],PLAYER_SIZE
 	
@@ -896,7 +1100,10 @@ proc InitializePlayer
 	ret
 endp InitializePlayer
 
-; true if carry flag
+;==============================
+; Description: 
+;	checks if mouse pos is in the boundary of given coordinates. true if carry flag
+;==============================
 proc isInBoundary
 	push bp
 	mov bp, sp
@@ -930,6 +1137,12 @@ proc isInBoundary
 	ret 8
 endp isInBoundary
 
+;==============================
+; Description: 
+;	erases the last (POLE_POSITION+POLE_WIDTH-POLE_PIXEL_MOVEMENT) with the background color, uses start and end space so instead of all pixels being removed, 
+;	the space pixels wont be removed. The reason for this is removing the pixels in the space runs the risk of erasing the player. 
+; 	pole position in cx
+;==============================
 proc ErasePole
 	push bp
 	mov bp, sp
@@ -937,52 +1150,49 @@ proc ErasePole
 	END_OF_SPACE equ [bp+4]
 	START_OF_SPACE equ [bp+6]
 
-	
-	push ax
-	push dx
-	push si
-	push di
+	PUSH_REGISTERS
 	
 	
-	
+	; This example assumes that POLE_PIXEL_MOVEMENT = 3 and POLE_WIDTH = 20
 	mov ax, POLE_WIDTH
-	sub ax, POLE_PIXEL_MOVEMENT
+	sub ax, POLE_PIXEL_MOVEMENT ; ax = 20 - 3 = 17
 	
-	add cx, ax
-	mov di, ax
+	add cx, ax ; cx which previously had poleposition now has poleposition + AX -> (STARTING RECTANGLE COLUMN = CX)
+	mov di, POLE_PIXEL_MOVEMENT ; the width of the rectangle will be POLE_PIXEL_MOVEMENT
 
 	
 	
-	mov dx, 0
-	mov al, BACKGROUND_COLOR
-	mov si, START_OF_SPACE
+	mov dx, 0 ; STARTING REC ROW = 0
+	mov al, BACKGROUND_COLOR ; al = BACKGROUND_COLOR -> the color of the rec will be the background color.
+	mov si, START_OF_SPACE ; the height will be start of space position.
 	call Rect
 	
 
 	mov ax, 200 ; graphic height
 	sub ax, END_OF_SPACE
 	
-	mov si, ax
+	mov si, ax ; next rec height = 200 - END_SPACE
 	
-	mov ax, POLE_WIDTH
-	sub ax, POLE_PIXEL_MOVEMENT
 	
-	mov di, ax	
+	mov di, POLE_PIXEL_MOVEMENT
 	
-	mov dx, END_OF_SPACE
-	mov al, BACKGROUND_COLOR
+	mov dx, END_OF_SPACE ; starting row
+	mov al, BACKGROUND_COLOR ; color
 	call Rect
 	
-	pop di
-	pop si
-	pop dx
-	pop ax
+	POP_REGISTERS
 
 	pop bp
 	ret 4
 endp ErasePole
 
 
+;==============================
+; Description: 
+;	draws the first (POLE_POSITION-POLE_PIXEL_MOVEMENT) with the pole color, uses start and end space so instead of all pixels being drawn, 
+;	the space pixels wont be drawn. The reason for this is drawing the pixels in the space runs the risk of drawing on the player.
+; 	pole position in cx
+;==============================
 proc DrawPole
 	push bp
 	mov bp, sp
@@ -991,56 +1201,44 @@ proc DrawPole
 	START_OF_SPACE equ [bp+6]
 
 	
-	push ax
-	push dx
-	push si
-	push di
+	PUSH_REGISTERS
 	
 	
-	
-	mov ax, POLE_WIDTH
-	sub ax, POLE_PIXEL_MOVEMENT
-	
-	mov bx, POLE_WIDTH
-	sub bx, ax
-	mov ax, bx
+	sub cx, POLE_PIXEL_MOVEMENT ; starting rec column = position - POLE_PIXEL_MOVEMENT
+	mov di, POLE_PIXEL_MOVEMENT ; width = POLE_PIXEL_MOVEMENT
 	
 	
 	
 	
-	sub cx, ax
-	mov di, ax
-	
-	
-	
-	
-	mov dx, 0
-	mov al, POLE_COLOR
-	mov si, START_OF_SPACE
+	mov dx, 0 ; starting row
+	mov al, POLE_COLOR ; color
+	mov si, START_OF_SPACE ; height
 	call Rect
 	
 
 	mov ax, 200 ; graphic height
 	sub ax, END_OF_SPACE
 	
-	mov si, ax
+	mov si, ax ; height = graphic height - space end position
 	
 
 	
 	
-	mov dx, END_OF_SPACE
-	mov al, POLE_COLOR
+	mov dx, END_OF_SPACE ; starting row is the END_SPACE_POSITION
+	mov al, POLE_COLOR ; color
 	call Rect
 	
-	pop di
-	pop si
-	pop dx
-	pop ax
+	POP_REGISTERS
 
 	pop bp
 	ret 4
 endp DrawPole
 
+;==============================
+; Description: 
+;	Uses the same logic as draw pole, but it draws POLE_WIDTH pixels. 
+;  	pole position in cx
+;==============================
 proc InitializePole
 	push bp
 	mov bp, sp
@@ -1051,11 +1249,7 @@ proc InitializePole
 
 
 	
-	
-	push ax
-	push dx
-	push si
-	push di
+	PUSH_REGISTERS
 	
 	
 	
@@ -1079,10 +1273,7 @@ proc InitializePole
 	mov di, POLE_WIDTH
 	call Rect
 	
-	pop di
-	pop si
-	pop dx
-	pop ax
+	POP_REGISTERS
 
 	pop bp
 	ret 4
@@ -1090,6 +1281,10 @@ proc InitializePole
 
 endp InitializePole
 
+;==============================
+; Description: 
+;	Erases leftover pole pixels after final erasure. used in ChangePolePositionToMax
+;==============================
 proc HandlePoleInconsistency
 	
 	mov cx, 320
@@ -1106,24 +1301,20 @@ proc HandlePoleInconsistency
 endp HandlePoleInconsistency
 
 
+;==============================
+; Description: 
+;	Uses the same logic as erase pole, but it erases POLE_WIDTH pixels. 
+;  	pole position in cx
+;==============================
 proc EndPole
 	push bp
 	mov bp, sp
-	
-	;call HandlePoleInconsistency
-	
+		
 	END_OF_SPACE equ [bp+4]
 	START_OF_SPACE equ [bp+6]
 
-	
-	push ax
-	push dx
-	push si
-	push di
-	
-	
-	
-	
+	PUSH_REGISTERS
+		
 	mov dx, 0
 	mov al, BACKGROUND_COLOR
 	mov si, START_OF_SPACE
@@ -1143,10 +1334,7 @@ proc EndPole
 	mov di, POLE_WIDTH
 	call Rect
 	
-	pop di
-	pop si
-	pop dx
-	pop ax
+	POP_REGISTERS
 
 	pop bp
 	ret 4
@@ -1442,9 +1630,6 @@ pop_next:
 	   int 21h        ; show all rest digits
        loop pop_next
 		
-	   mov dl, ','
-       mov ah, 2h
-	   int 21h
    
 	   pop dx
 	   pop cx
@@ -1454,6 +1639,12 @@ pop_next:
 	   ret
 endp ShowAxDecimal
 
+proc TextMode
+	
+	mov ax, 02
+	int 10h
+	ret
+endp TextMode
 
 EndOfCsLbl:
 End start
