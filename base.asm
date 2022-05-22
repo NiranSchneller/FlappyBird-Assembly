@@ -28,8 +28,8 @@ PLAYER_AUTO_PIXEL_MOVEMENT = 2
 PLAYER_MANUAL_PIXEL_MOVEMENT = 30
 STARTING_PLAYER_Y_POSITION = 20
 PLAYER_COLUMN = 30
-TRUE = 1
 FALSE = 0
+TRUE = 1
 POLE_WAIT_INTERVAL = 0
 POLE_BOUNDARY = 0
 POLE_COLOR = 2 ; Goes by graphic mode colors
@@ -49,8 +49,8 @@ GAME_OVER_COLUMN = 60
 GAME_OVER_ROW = 60
 GAME_OVER_WIDTH = 192
 GAME_OVER_HEIGHT = 32
-GAME_OVER_RECTANGLE_CONSTANT = 10 ; works on x axis and y axis
 GAME_OVER_RECTANGLE_HEIGHT_CONSTANT = 50 
+GAME_OVER_RECTANGLE_CONSTANT = 10 ; works on x axis and y axis
 
 
 DATASEG
@@ -521,9 +521,17 @@ proc DeathScreen
 	call PrintScore
 	call PrintFinalMessage
 	
-	mov ah, 0h
+	ClearBuffer: 
+		mov ah, 0h
+		int 16h
+	mov ah, 1h
 	int 16h
 	
+	jnz ClearBuffer
+	
+	mov ah, 0h
+	int 16h
+
 	call MainScreen
 	ret	
 endp DeathScreen
