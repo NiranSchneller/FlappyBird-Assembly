@@ -1,3 +1,5 @@
+# Flappybird in assembly!
+
 Hello and welcome to Flappy Bird: Assembly Edition!
 
 This project uses DOSBOX, an ms-dos emulator.
